@@ -38,7 +38,6 @@ async def lifespan(app : FastAPI) :
     state.gemini_client = gemini_client
     state.deepgram_client = deepgram_client
     state.mongo_client = mongo_client
-
     
     logger.info("System Startup: Models and Config Loaded.")
     
@@ -70,7 +69,7 @@ async def add_scenario(request : Request) -> dict :
         query = data['scenario_prompt'] , 
         mongo_client = state.mongo_client , 
         gemini_client = state.gemini_client , 
-        config = state.config
+        config = state.config['add-scenario']
     )
 
     return {'response' : response}
@@ -89,7 +88,7 @@ async def edit_scenario(request : Request) -> dict :
         query = data['scenario_prompt'] , 
         mongo_client = state.mongo_client , 
         gemini_client = state.gemini_client , 
-        config = state.config , 
+        config = state.config['edit-scenario'] , 
         api_key = os.environ['api_key']
     )
 

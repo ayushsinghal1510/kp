@@ -1,0 +1,23 @@
+logger : 
+  color : 
+    debug : "\x1b[33m"
+    info : "\x1b[32m"
+    warning : "\x1b[38;5;208m"
+    error : "\x1b[31m"
+    critical : "\x1b[31;1m"
+    reset : "\x1b[0m"
+  log-format : '%(asctime)s - %(levelname)s - %(message)s'
+  date-format : '%Y-%m-%d %H:%M:%S'
+
+add-scenario : 
+  prompt-path : assets/prompts/scenario-creation.md
+  model : gemini-2.5-flash
+  database-name : your_database
+  collection-name : scen
+  workflow-path : assets/jsons/default-scenario.json
+
+edit-scenario : 
+  prompt-path : assets/prompts/scenario-editing.md
+  model : gemini-2.5-flash
+  database-name : your_database
+  collection-name : scen

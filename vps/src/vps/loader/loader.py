@@ -3,10 +3,6 @@ import yaml
 from deepgram import DeepgramClient
 from google.genai import Client 
 
-from google.genai.types import (
-    GenerateContentConfig , ThinkingConfig , 
-    Part , Content
-)
 import os
 from pymongo import MongoClient
 

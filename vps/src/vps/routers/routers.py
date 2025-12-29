@@ -1,8 +1,12 @@
+import os
 from google.genai import Client
 from google.genai.types import GenerateContentConfig
 from pymongo import MongoClient
+import json
 from ..services import create_generation_config , json_to_google_chat
 from ..llm import run_json_gemini
+from requests import Response
+import requests 
 
 
 async def add_scenario_route(
@@ -31,42 +35,64 @@ async def add_scenario_route(
         model = config['model']
     )
 
-    try : 
+    with open(config['workflow-path']) as workflow_file : 
+        workflow : dict = json.load(workflow_file)
 
-        db = mongo_client[config['database-name']]
-        collection = db[config['collection-name']]
-        
-        api_key = 'rew'
-        
-        # * Prepare document to insert
-        scenario_doc = {
-            'scenario_name' : response.get('scenario_name' , '') , 
-            'scenario_prompt' : response.get('scenario_prompt' , '') , 
-            'questions_for_feedback' : response.get('questions_for_feedback' , []) , 
-            'difficulty_status' : response.get('difficulty_status' , '') , 
-            'api_key' : api_key
-        }
-        
-        # * Insert the document
-        result = collection.insert_one(scenario_doc)
-        
-        # * Add the inserted ID and API key to response
-        response['_id'] = str(result.inserted_id)
-        response['api_key'] = api_key
-        response['status'] = 'success'
-        response['message'] = 'Scenario added successfully'
-        
-        print(f"✓ Scenario added with ID: {result.inserted_id}")
-        
-    except Exception as e : 
+    workflow['variables']['feedback_questions']['value'] = response['questions_for_feedback']
+    workflow['nodes']['llm']['parameters']['system_prompt'] = response['scenario_prompt']
 
-        print(f"✗ Error adding scenario to database: {e}")
-        response['status'] = 'error'
-        response['message'] = f'Failed to add scenario: {str(e)}'
+    api_response : Response = requests.post(
+        'https://database.voxio.in/add-flow' , 
+        json = {
+            'agent' : {'workflow' : workflow} , 
+            'flow_name' : response['scenario_name'] ,
+        } , 
+        headers = {'api_key' : os.environ['VOXIO_API_KEY']}
+    )
 
-    return response
+    if api_response.status_code == 200 : 
 
-    # * Add flow to db and to the api voxio
+        api_key : str = api_response.json().get('api_key' , '')
+
+        try : 
+
+            db = mongo_client[config['database-name']]
+            collection = db[config['collection-name']]
+            
+            # * Prepare document to insert
+            scenario_doc = {
+                'scenario_name' : response.get('scenario_name' , '') , 
+                'scenario_prompt' : response.get('scenario_prompt' , '') , 
+                'questions_for_feedback' : response.get('questions_for_feedback' , []) , 
+                'difficulty_status' : response.get('difficulty_status' , '') , 
+                'api_key' : api_key
+            }
+            
+            # * Insert the document
+            result = collection.insert_one(scenario_doc)
+            
+            # * Add the inserted ID and API key to response
+            response['_id'] = str(result.inserted_id)
+            response['api_key'] = api_key
+            response['status'] = 'success'
+            response['message'] = 'Scenario added successfully'
+            
+            print(f"✓ Scenario added with ID: {result.inserted_id}")
+
+        except Exception as e : 
+
+            print(f"✗ Error adding scenario to database: {e}")
+            response['status'] = 'error'
+            response['message'] = f'Failed to add scenario: {str(e)}'
+
+        return response
+
+    else : print(api_response.json())
+
+    return {
+        'status' : 'error' , 
+        'message' : 'Failed to create flow in Voxio' ,
+    }
 
 async def edit_scenario_route(
     query : str , 
@@ -156,3 +182,4 @@ async def edit_scenario_route(
     # * Edit flow to db and to the api voxio
 
     return response
+
