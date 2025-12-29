@@ -89,7 +89,7 @@ async def edit_scenario(request : Request) -> dict :
         mongo_client = state.mongo_client , 
         gemini_client = state.gemini_client , 
         config = state.config['edit-scenario'] , 
-        api_key = os.environ['api_key']
+        api_key = data['api_key']
     )
 
     return {'response' : response}

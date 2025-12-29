@@ -21,3 +21,4 @@ edit-scenario :
   model : gemini-2.5-flash
   database-name : your_database
   collection-name : scen
+  workflow-path : assets/jsons/default-scenario.json
