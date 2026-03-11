@@ -1,43 +1,9 @@
-import os
-import yaml
-from deepgram import DeepgramClient
-from google.genai import Client 
-
-import os
-from pymongo import MongoClient
-
 from logging import (
     Logger , getLogger , 
     StreamHandler , Formatter , 
     DEBUG , INFO , WARNING , ERROR , CRITICAL , 
     LogRecord
 )
-
-def load_mongo_client() -> MongoClient : 
-
-    client : MongoClient = MongoClient(os.environ['MONGO_URL'])
-
-    return client 
-
-def load_deepgram_client() -> DeepgramClient : 
-
-    client : DeepgramClient = DeepgramClient(api_key = os.environ['DEEPGRAM_API_KEY'])
-
-    return client 
-
-def load_config() -> dict : 
-
-    with open('config.yml') as config_file : 
-
-        config : dict = yaml.safe_load(config_file)
-
-    return config
-
-def load_gemini_client() -> Client : 
-
-    client : Client = Client(api_key = os.environ['GEMINI_API_KEY'])
-
-    return client
 
 class ColoredFormatter(Formatter) : 
 
@@ -97,14 +63,3 @@ def load_logger(config : dict) -> Logger:
 
     return logger
 
-def load_all_clients() -> tuple[DeepgramClient , dict , Logger , Client , MongoClient] : 
-
-    deepgram_client : DeepgramClient = load_deepgram_client()
-
-    config : dict = load_config()
-
-    gemini_client : Client = load_gemini_client()
-    logger : Logger = load_logger(config['logger'])
-    mongo_client : MongoClient = load_mongo_client()
-
-    return deepgram_client , config , logger , gemini_client , mongo_client
