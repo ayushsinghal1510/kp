@@ -42,7 +42,7 @@ async def add_scenario_route(
     workflow['nodes']['llm']['parameters']['system_prompt'] = response['scenario_prompt']
 
     api_response : Response = requests.post(
-        'https://database.voxio.in/add-flow' , 
+        'https://database.voxio.in/flow' , 
         json = {
             'agent' : {'workflow' : workflow} , 
             'flow_name' : response['scenario_name'] ,
