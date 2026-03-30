@@ -1,3 +1,4 @@
+import json
 import uvicorn
 from contextlib import asynccontextmanager
 import os
@@ -14,7 +15,7 @@ from jwcrypto.jwk import JWK
 
 from fastapi.middleware.cors import CORSMiddleware
 
-from fastapi import FastAPI, Header
+from fastapi import FastAPI, Header, Request
 from services import env_str_to_bool , env_str_to_list
 
 from dotenv import load_dotenv
@@ -60,7 +61,7 @@ app.add_middleware(
 @app.get('/')
 async def read_root() : return {'Hello' : 'World'}
 
-@app.post('/')
+@app.post('/session')
 def process_new_session(token : str = Header(... , alias = 'token')) : 
 
     jwetoken : JWE = JWE()
@@ -73,52 +74,105 @@ def process_new_session(token : str = Header(... , alias = 'token')) :
     jwetoken.deserialize(token)
     jwetoken.decrypt(jwekey)
 
-    payload = jwetoken.payload.decode('utf-8')
-
-    print(payload)
+    payload = json.loads(jwetoken.payload.decode('utf-8'))
 
     response = requests.get(
-        'chat.voxio.in/agents/session' , 
+        'https://chat.voxio.in/agents/session' , 
         params = {
             'session_id' : payload['session_id']
         }
     )
 
-    response_json = response.json()
+    if response.status_code == 200 : 
 
-    transcription = response_json['session_data']['state']['diagnosis_conversation_history']
-    feedback = response_json['session_data']['state']['feedback']
-    summary = response_json['session_data']['state']['summary']
-    score = response_json['session_data']['state']['score']
+        response_json = response.json()
+
+        transcription = response_json['session_data']['state'].get('diagnosis_conversation_history')
+        feedback = response_json['session_data']['state'].get('feedback')
+        summary = response_json['session_data']['state'].get('summary')
+        score = response_json['session_data']['state'].get('score')
+
+        session_doc = {
+            'transcription' : transcription , 
+            'feedback' : feedback , 
+            'summary' : summary , 
+            'score' : score , 
+            'student_id' : payload['student_id'] , 
+            'scenario_id' : payload['scenario_id'] , 
+            # ! Add created and updated at here 
+        }
+
+        session_result : InsertOneResult = state.sessions_collection.insert_one(session_doc)
+        new_session_id : str = str(session_result.inserted_id)
+        
+        student_update_path = f"session_list.{payload['scenario_id']}"
+        
+        state.students_collection.update_one(
+            {"_id": ObjectId(payload['student_id']) if isinstance(payload['student_id'], str) else payload['student_id']},
+            {"$push": {student_update_path: new_session_id}},
+            upsert = True
+        )
+
+        state.scenarios_collection.update_one(
+            {"_id" : ObjectId(payload['scenario_id']) if isinstance(payload['scenario_id'] , str) else payload['scenario_id']} , 
+            {"$push" : {"sessions" : new_session_id}} , 
+            upsert = True
+        )
+
+        return {
+            'status' : 'success' , 
+            'message' : 'Details updated succesfully at dashboard'
+        }
+
+    return {
+        'status' : 'error' , 
+        'message' : 'Not able to find session logs'
+    }
+
+@app.post('/fallback')
+async def process_fallback(request : Request) : 
+
+    request_json : dict = await request.json()
+
+    transcription = request_json.get('diagnosis_conversation_history' , [])
+    feedback = request_json.get('feedback' , '')
+    summary = request_json.get('summary' , '')
+    score = request_json.get('score' , 0)
+    
+    scenario_id : str = request_json['scenario_id']
+    student_id : str = request_json['student_id']
 
     session_doc = {
         'transcription' : transcription , 
         'feedback' : feedback , 
         'summary' : summary , 
         'score' : score , 
-        'student_id' : payload['student_id'] , 
-        'scenario_id' : payload['scenario_id'] , 
+        'student_id' : student_id , 
+        'scenario_id' : scenario_id , 
         # ! Add created and updated at here 
     }
 
     session_result : InsertOneResult = state.sessions_collection.insert_one(session_doc)
     new_session_id : str = str(session_result.inserted_id)
     
-    student_update_path = f"session_list.{payload['scenario_id']}"
+    student_update_path = f"session_list.{scenario_id}"
     
     state.students_collection.update_one(
-        {"_id": ObjectId(payload['student_id']) if isinstance(payload['student_id'], str) else payload['student_id']},
+        {"_id": ObjectId(student_id) if isinstance(student_id, str) else student_id},
         {"$push": {student_update_path: new_session_id}},
         upsert = True
     )
 
     state.scenarios_collection.update_one(
-        {"_id" : ObjectId(payload['scenario_id']) if isinstance(payload['scenario_id'] , str) else payload['scenario_id']} , 
+        {"_id" : ObjectId(scenario_id) if isinstance(scenario_id , str) else scenario_id} , 
         {"$push" : {"sessions" : new_session_id}} , 
         upsert = True
     )
 
-    return new_session_id
+    return {
+        'status' : 'success' , 
+        'message' : 'Details updated succesfully at dashboard'
+    }
 
 def main() : 
 

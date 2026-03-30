@@ -1,4 +1,5 @@
 import os
+import traceback
 from google.genai import Client
 from google.genai.types import GenerateContentConfig
 from pymongo import MongoClient
@@ -83,7 +84,7 @@ async def add_scenario_route(
 
         except Exception as e : 
 
-            print(f"✗ Error adding scenario to database: {e}")
+            print(f"✗ Error adding scenario to database: {e} , {traceback.format_exc()}")
             response['status'] = 'error'
             response['message'] = f'Failed to add scenario: {str(e)}'
 
