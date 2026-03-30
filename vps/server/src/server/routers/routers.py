@@ -41,6 +41,8 @@ async def add_scenario_route(
     workflow['variables']['feedback_questions']['value'] = response['questions_for_feedback']
     workflow['nodes']['llm']['parameters']['system_prompt'] = response['scenario_prompt']
 
+    print(os.environ['VOXIO_API_KEY'])
+
     api_response : Response = requests.post(
         'https://database.voxio.in/flow' , 
         json = {
