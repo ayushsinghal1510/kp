@@ -1,15 +1,16 @@
 from logging import Logger
 import os
+from typing import Any
 from pymongo import MongoClient
-from pymongo.cursor import Collection
+# from pymongo.cursor import Collection
 from pymongo.synchronous.database import Database
 from services import load_config , load_logger
 
 def load_mongo_clients() -> tuple[
     MongoClient , 
-    Collection , 
-    Collection , 
-    Collection
+    Any , 
+    Any , 
+    Any
 ] : 
 
     connection_string = os.environ['MONGO_URL']
@@ -17,9 +18,9 @@ def load_mongo_clients() -> tuple[
     client : MongoClient = MongoClient(connection_string)
 
     db : Database = client['school_database']
-    students_col : Collection = db['students']
-    scenarios_col : Collection = db['scenarios']
-    sessions_col : Collection = db['sessions']
+    students_col = db['students']
+    scenarios_col = db['scenarios']
+    sessions_col = db['sessions']
 
     return (
         client , 
@@ -31,9 +32,9 @@ def load_mongo_clients() -> tuple[
 def load_clients() -> tuple[
     dict , 
     Logger , 
-    Collection , 
-    Collection , 
-    Collection
+    Any , 
+    Any , 
+    Any
 ] :  
 
     config : dict = load_config(config_file_path = 'config.yml')

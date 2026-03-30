@@ -18,4 +18,5 @@ members = [
     "vps/server",
     "vps/posta",
     "services",
+    "benchmarking/vpsb/postab",
 ]
