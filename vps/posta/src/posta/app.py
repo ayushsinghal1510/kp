@@ -4,7 +4,6 @@ from contextlib import asynccontextmanager
 import os
 import requests
 from bson.objectid import ObjectId
-from pymongo.results import InsertOneResult
 
 from .loader import load_clients
 
@@ -102,7 +101,7 @@ def process_new_session(token : str = Header(... , alias = 'token')) :
             # ! Add created and updated at here 
         }
 
-        session_result : InsertOneResult = state.sessions_collection.insert_one(session_doc)
+        session_result = state.sessions_collection.insert_one(session_doc)
         new_session_id : str = str(session_result.inserted_id)
         
         student_update_path = f"session_list.{payload['scenario_id']}"
@@ -152,7 +151,7 @@ async def process_fallback(request : Request) :
         # ! Add created and updated at here 
     }
 
-    session_result : InsertOneResult = state.sessions_collection.insert_one(session_doc)
+    session_result = state.sessions_collection.insert_one(session_doc)
     new_session_id : str = str(session_result.inserted_id)
     
     student_update_path = f"session_list.{scenario_id}"

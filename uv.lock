@@ -880,6 +880,7 @@ dependencies = [
     { name = "jwcrypto" },
     { name = "pymongo" },
     { name = "python-dotenv" },
+    { name = "requests" },
     { name = "uvicorn" },
 ]
 
@@ -890,6 +891,7 @@ requires-dist = [
     { name = "jwcrypto", specifier = ">=1.5.6" },
     { name = "pymongo", specifier = ">=4.16.0" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
+    { name = "requests", specifier = ">=2.33.0" },
     { name = "uvicorn", specifier = ">=0.41.0" },
 ]
 
