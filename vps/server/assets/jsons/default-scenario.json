@@ -141,7 +141,7 @@
                 "model": "llama-3.3-70b-versatile",
                 "history_key": "feedback_conversation_history",
                 "llm_return_type": {
-                    "speak": {
+                    "feedback": {
                         "type": "str",
                         "description": "The feedback text"
                     },
