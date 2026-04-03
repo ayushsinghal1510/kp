@@ -160,7 +160,7 @@
             "type": "out",
             "parameters": {
                 "variables": [
-                    "speak",
+                    "feedback",
                     "score"
                 ]
             }
