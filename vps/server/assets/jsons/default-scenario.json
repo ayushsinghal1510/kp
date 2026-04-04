@@ -146,8 +146,8 @@
                         "description": "The feedback text"
                     },
                     "score": {
-                        "type": "str",
-                        "description": "The feedback score after evaluation"
+                        "type": "float",
+                        "description": "The feedback score in float strictly between 0 and 1 after evaluation"
                     }
                 }
             },
