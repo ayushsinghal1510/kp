@@ -1332,7 +1332,7 @@ requires-dist = [
     { name = "google-ai-generativelanguage", specifier = ">=0.6.15" },
     { name = "google-genai", specifier = ">=1.38.0" },
     { name = "google-generativeai", specifier = ">=0.8.5" },
-    { name = "pymongo", specifier = ">=4.15.5" },
+    { name = "pymongo", specifier = ">=4.16.0" },
     { name = "python-dotenv", specifier = ">=1.2.1" },
     { name = "python-multipart", specifier = ">=0.0.21" },
     { name = "pyyaml", specifier = ">=6.0.3" },

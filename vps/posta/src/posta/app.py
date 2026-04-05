@@ -51,10 +51,10 @@ app = FastAPI(lifespan = lifespan)
 
 app.add_middleware(
     CORSMiddleware , 
-    allow_origins = env_str_to_list(os.environ['ALLOWED_ORIGINS']) , 
-    allow_credentials = env_str_to_bool(os.environ['ALLOWED_CREDENTIALS']) , 
-    allow_methods = env_str_to_list(os.environ['ALLOWED_METHODS']) , 
-    allow_headers = env_str_to_list(os.environ['ALLOWED_HEADERS']) 
+    allow_origins = '*' , 
+    allow_credentials = True , 
+    allow_methods = '*' , 
+    allow_headers = '*' 
 )
 
 @app.get('/')
