@@ -86,15 +86,13 @@ def process_new_session(token : str = Header(... , alias = 'token')) :
 
         response_json = response.json()
 
-        transcription = response_json['session_data']['state'].get('diagnosis_conversation_history')
-        feedback = response_json['session_data']['state'].get('feedback')
-        summary = response_json['session_data']['state'].get('summary')
-        score = response_json['session_data']['state'].get('score')
+        transcription = response_json['session-data']['state'].get('diagnosis_conversation_history')
+        feedback = response_json['session-data']['state'].get('feedback')
+        score = response_json['session-data']['state'].get('score')
 
         session_doc = {
             'transcription' : transcription , 
             'feedback' : feedback , 
-            'summary' : summary , 
             'score' : score , 
             'student_id' : payload['student_id'] , 
             'scenario_id' : payload['scenario_id'] , 
@@ -126,51 +124,6 @@ def process_new_session(token : str = Header(... , alias = 'token')) :
     return {
         'status' : 'error' , 
         'message' : 'Not able to find session logs'
-    }
-
-@app.post('/fallback')
-async def process_fallback(request : Request) : 
-
-    request_json : dict = await request.json()
-
-    transcription = request_json.get('diagnosis_conversation_history' , [])
-    feedback = request_json.get('feedback' , '')
-    summary = request_json.get('summary' , '')
-    score = request_json.get('score' , 0)
-    
-    scenario_id : str = request_json['scenario_id']
-    student_id : str = request_json['student_id']
-
-    session_doc = {
-        'transcription' : transcription , 
-        'feedback' : feedback , 
-        'summary' : summary , 
-        'score' : score , 
-        'student_id' : student_id , 
-        'scenario_id' : scenario_id , 
-        # ! Add created and updated at here 
-    }
-
-    session_result = state.sessions_collection.insert_one(session_doc)
-    new_session_id : str = str(session_result.inserted_id)
-    
-    student_update_path = f"session_list.{scenario_id}"
-    
-    state.students_collection.update_one(
-        {"_id": ObjectId(student_id) if isinstance(student_id, str) else student_id},
-        {"$push": {student_update_path: new_session_id}},
-        upsert = True
-    )
-
-    state.scenarios_collection.update_one(
-        {"_id" : ObjectId(scenario_id) if isinstance(scenario_id , str) else scenario_id} , 
-        {"$push" : {"sessions" : new_session_id}} , 
-        upsert = True
-    )
-
-    return {
-        'status' : 'success' , 
-        'message' : 'Details updated succesfully at dashboard'
     }
 
 def main() : 
