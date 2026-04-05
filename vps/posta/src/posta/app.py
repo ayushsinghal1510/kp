@@ -34,12 +34,12 @@ async def lifespan(app : FastAPI) :
         sessions_collection
     ) = load_clients()
 
-    app.state.config = config 
-    app.state.logger = logger
+    state.config = config 
+    state.logger = logger
 
-    app.state.students_collection = students_collection
-    app.state.scenarios_collection = scenarios_collection 
-    app.state.sessions_collection = sessions_collection
+    state.students_collection = students_collection
+    state.scenarios_collection = scenarios_collection 
+    state.sessions_collection = sessions_collection
 
     logger.info("System Startup: Models and Config Loaded.")
 
