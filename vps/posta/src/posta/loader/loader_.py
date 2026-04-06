@@ -17,7 +17,7 @@ def load_mongo_clients() -> tuple[
 
     client : MongoClient = MongoClient(connection_string)
 
-    db : Database = client['school_database']
+    db : Database = client['test']
     students_col = db['students']
     scenarios_col = db['scenarios']
     sessions_col = db['sessions']

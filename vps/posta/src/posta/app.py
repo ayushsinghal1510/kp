@@ -75,6 +75,8 @@ def process_new_session(token : str = Header(... , alias = 'token')) :
 
     payload = json.loads(jwetoken.payload.decode('utf-8'))
 
+    print(payload)
+
     response = requests.get(
         'https://chat.voxio.in/agents/session' , 
         params = {
@@ -86,10 +88,12 @@ def process_new_session(token : str = Header(... , alias = 'token')) :
 
         response_json = response.json()
 
-        transcription = response_json['session_data']['state'].get('diagnosis_conversation_history')
-        feedback = response_json['session_data']['state'].get('feedback')
-        summary = response_json['session_data']['state'].get('summary')
-        score = response_json['session_data']['state'].get('score')
+        # print(response_json)
+
+        transcription = response_json['session-data']['state'].get('diagnosis_conversation_history')
+        feedback = response_json['session-data']['state'].get('feedback')
+        summary = response_json['session-data']['state'].get('summary')
+        score = response_json['session-data']['state'].get('score')
 
         session_doc = {
             'transcription' : transcription , 
@@ -180,4 +184,3 @@ def main() :
         host = '0.0.0.0' , 
         port = 8000
     )
-
