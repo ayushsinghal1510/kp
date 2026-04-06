@@ -34,12 +34,12 @@ async def lifespan(app : FastAPI) :
         sessions_collection
     ) = load_clients()
 
-    app.state.config = config 
-    app.state.logger = logger
+    state.config = config 
+    state.logger = logger
 
-    app.state.students_collection = students_collection
-    app.state.scenarios_collection = scenarios_collection 
-    app.state.sessions_collection = sessions_collection
+    state.students_collection = students_collection
+    state.scenarios_collection = scenarios_collection 
+    state.sessions_collection = sessions_collection
 
     logger.info("System Startup: Models and Config Loaded.")
 
@@ -51,10 +51,10 @@ app = FastAPI(lifespan = lifespan)
 
 app.add_middleware(
     CORSMiddleware , 
-    allow_origins = env_str_to_list(os.environ['ALLOWED_ORIGINS']) , 
-    allow_credentials = env_str_to_bool(os.environ['ALLOWED_CREDENTIALS']) , 
-    allow_methods = env_str_to_list(os.environ['ALLOWED_METHODS']) , 
-    allow_headers = env_str_to_list(os.environ['ALLOWED_HEADERS']) 
+    allow_origins = '*' , 
+    allow_credentials = True , 
+    allow_methods = '*' , 
+    allow_headers = '*' 
 )
 
 @app.get('/')
@@ -75,8 +75,6 @@ def process_new_session(token : str = Header(... , alias = 'token')) :
 
     payload = json.loads(jwetoken.payload.decode('utf-8'))
 
-    print(payload)
-
     response = requests.get(
         'https://chat.voxio.in/agents/session' , 
         params = {
@@ -88,17 +86,13 @@ def process_new_session(token : str = Header(... , alias = 'token')) :
 
         response_json = response.json()
 
-        # print(response_json)
-
         transcription = response_json['session-data']['state'].get('diagnosis_conversation_history')
         feedback = response_json['session-data']['state'].get('feedback')
-        summary = response_json['session-data']['state'].get('summary')
         score = response_json['session-data']['state'].get('score')
 
         session_doc = {
             'transcription' : transcription , 
             'feedback' : feedback , 
-            'summary' : summary , 
             'score' : score , 
             'student_id' : payload['student_id'] , 
             'scenario_id' : payload['scenario_id'] , 
@@ -130,51 +124,6 @@ def process_new_session(token : str = Header(... , alias = 'token')) :
     return {
         'status' : 'error' , 
         'message' : 'Not able to find session logs'
-    }
-
-@app.post('/fallback')
-async def process_fallback(request : Request) : 
-
-    request_json : dict = await request.json()
-
-    transcription = request_json.get('diagnosis_conversation_history' , [])
-    feedback = request_json.get('feedback' , '')
-    summary = request_json.get('summary' , '')
-    score = request_json.get('score' , 0)
-    
-    scenario_id : str = request_json['scenario_id']
-    student_id : str = request_json['student_id']
-
-    session_doc = {
-        'transcription' : transcription , 
-        'feedback' : feedback , 
-        'summary' : summary , 
-        'score' : score , 
-        'student_id' : student_id , 
-        'scenario_id' : scenario_id , 
-        # ! Add created and updated at here 
-    }
-
-    session_result = state.sessions_collection.insert_one(session_doc)
-    new_session_id : str = str(session_result.inserted_id)
-    
-    student_update_path = f"session_list.{scenario_id}"
-    
-    state.students_collection.update_one(
-        {"_id": ObjectId(student_id) if isinstance(student_id, str) else student_id},
-        {"$push": {student_update_path: new_session_id}},
-        upsert = True
-    )
-
-    state.scenarios_collection.update_one(
-        {"_id" : ObjectId(scenario_id) if isinstance(scenario_id , str) else scenario_id} , 
-        {"$push" : {"sessions" : new_session_id}} , 
-        upsert = True
-    )
-
-    return {
-        'status' : 'success' , 
-        'message' : 'Details updated succesfully at dashboard'
     }
 
 def main() : 

@@ -44,6 +44,8 @@ async def add_scenario_route(
 
     print(os.environ['VOXIO_API_KEY'])
 
+    print(workflow)
+
     api_response : Response = requests.post(
         'https://database.voxio.in/flow' , 
         json = {

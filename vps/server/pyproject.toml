@@ -14,7 +14,7 @@ dependencies = [
     "google-genai>=1.38.0",
     "google-generativeai>=0.8.5",
     "python-multipart>=0.0.21",
-    "pymongo>=4.15.5",
+    "pymongo>=4.16.0",
 ]
 
 [project.scripts]
