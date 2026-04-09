@@ -1,0 +1,22 @@
+[project]
+name = "rpoc"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Ayush SInghal", email = "ayushsinghal1510@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "groq>=1.1.2",
+    "pandas>=2.3.3",
+    "python-dotenv>=1.2.2",
+    "streamlit>=1.55.0",
+]
+
+[project.scripts]
+rpoc = "rpoc:main"
+
+[build-system]
+requires = ["uv_build>=0.8.17,<0.9.0"]
+build-backend = "uv_build"
