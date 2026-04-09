@@ -6,8 +6,11 @@ import sys
 import re
 import os
 
+from dotenv import load_dotenv
+
 client = Groq(api_key = os.environ['GROQ_API_KEY'])
 
+load_dotenv()
 st.set_page_config(layout = "wide")
 
 CSV_PATH = 'assets/data.csv'
