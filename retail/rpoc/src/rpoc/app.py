@@ -5,7 +5,7 @@ import io
 import sys
 import re
 import os
-
+from fpdf import FPDF # Added
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -15,11 +15,19 @@ st.set_page_config(layout = "wide")
 
 CSV_PATH = 'assets/data.csv'
 
+# --- NEW: PDF Generation Helper ---
+def create_pdf(text):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    # multi_cell allows for text wrapping
+    pdf.multi_cell(0, 10, txt=text.encode('latin-1', 'replace').decode('latin-1'))
+    return pdf.output(dest='S').encode('latin-1')
+
 if 'df' not in st.session_state:
     if os.path.exists(CSV_PATH):
         st.session_state.df = pd.read_csv(CSV_PATH)
     else:
-        # Fallback if file is missing
         st.error("CSV not found at assets/data.csv")
         st.stop()
 
@@ -29,15 +37,13 @@ if 'chat_history' not in st.session_state:
 def execute_code(code_str):
     output = io.StringIO()
     sys.stdout = output
-    # We use a shared dictionary for globals and locals to handle reassignments like 'df = ...'
     context = {
         "pd": pd,
         "st": st,
-        "df": st.session_state.df.copy() # Use a copy to work on
+        "df": st.session_state.df.copy() 
     }
     try:
         exec(code_str, context, context)
-        # Force the potentially reassigned 'df' back into session state
         st.session_state.df = context["df"]
         result = output.getvalue()
         return True, result, None
@@ -49,23 +55,24 @@ def execute_code(code_str):
 # --- UI ---
 tab1, tab2 = st.tabs(["📊 Data View", "🧠 Agentic Chatbot"])
 
-with st.sidebar:
-    st.header("Settings")
-    if st.button("💾 Save Changes to CSV"):
-        try:
-            # Overwrite the file with current session state
-            st.session_state.df.to_csv(CSV_PATH, index=False)
-            st.success(f"File saved successfully!")
-        except Exception as e:
-            st.error(f"Error saving file: {e}")
-
 with tab1:
     st.dataframe(st.session_state.df, use_container_width=True, hide_index=True)
 
 with tab2:
-    for msg in st.session_state.chat_history:
+    # UPDATED: Display history with download buttons
+    for i, msg in enumerate(st.session_state.chat_history):
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
+            # Add button only for assistant responses
+            if msg["role"] == "assistant":
+                pdf_bytes = create_pdf(msg["content"])
+                st.download_button(
+                    label="📥 Download as PDF",
+                    data=pdf_bytes,
+                    file_name=f"response_{i}.pdf",
+                    mime="application/pdf",
+                    key=f"btn_{i}" # Unique key for Streamlit
+                )
 
     if prompt := st.chat_input("Ex: 'Add a product Mars Bar' or 'Increase margin of X'"):
         st.session_state.chat_history.append({"role": "user", "content": prompt})
@@ -141,8 +148,6 @@ with tab2:
         status.update(label="Complete!", state="complete", expanded=False)
         
         if success:
-            with st.chat_message("assistant"):
-                st.markdown(final_msg)
             st.session_state.chat_history.append({"role": "assistant", "content": final_msg})
             st.rerun()
         else:
