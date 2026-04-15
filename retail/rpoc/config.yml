@@ -1,0 +1,42 @@
+layout : wide
+
+csv-path : assets/data/data.csv
+order-lists-path : assets/data/ordering_lists.json
+invoices-path : assets/data/invocies.json
+
+pdf : 
+  font : Arial
+  size : 12
+
+prompts : 
+  order-image : assets/prompts/order_image.md
+  coder : assets/prompts/coder.md
+  review : assets/prompts/review.md
+
+tabs : [
+  Data View , 
+  Agentic Chatbot , 
+  Ordering Lists , 
+  Orders , 
+  Invoices
+]
+
+agentic-chatbot : 
+  pdf-download-button : Download response as PDF
+  input-label : Ask the Data Agent
+
+  max-retries : 3
+
+ordering-lists : 
+  header : Upload Ordering Lists
+  
+orders : 
+  header : Order Management
+
+invoices : 
+  header : Vendor Invoices
+
+order-image : 
+  model : meta-llama/llama-4-scout-17b-16e-instruct
+  response-format : 
+    type : json_object

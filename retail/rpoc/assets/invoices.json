@@ -1,0 +1,52 @@
+[
+    {
+        "vendor": "D-Mart",
+        "date": "2026-04-15",
+        "items": [
+            {
+                "Product Name": "C&C Daily Pore Cleanser 100gr",
+                "Qty (CTN)": 30.0,
+                "Packing Size (PC)": 6.0,
+                "Total Ordered Qty": 180.0,
+                "Ctn Price (SGD) (W/O GST)": 241.0,
+                "Unit Price (SGD) (W/O GST)": 40.1667,
+                "Total (RAW)": 7230.0,
+                "Unit Cost (SGD - PC) (W/O GST)": 40.1667,
+                "Total Cost (RAW)": 7230.0,
+                "Unit Cost (9%) (SGD - PC)": 43.7817,
+                "Ctn Price (9%) (SGD)": 262.69,
+                "Total Cost (SGD) (W GST)": 7880.7,
+                "TMG Selling Price per piece": 51.5243,
+                "Total Selling": 9274.38,
+                "UNIT PROFIT ($)": 11.3577,
+                "TOTAL PROFIT ($)": 2044.38,
+                "Profit Margin - %": 22.04
+            }
+        ]
+    },
+    {
+        "vendor": "Reliance Smart",
+        "date": "2026-04-15",
+        "items": [
+            {
+                "Product Name": "Alpenliebe Caramel",
+                "Qty (CTN)": 30.0,
+                "Packing Size (PC)": 6.0,
+                "Total Ordered Qty": 180.0,
+                "Ctn Price (SGD) (W/O GST)": 204.0,
+                "Unit Price (SGD) (W/O GST)": 34.0,
+                "Total (RAW)": 6120.0,
+                "Unit Cost (SGD - PC) (W/O GST)": 34.0,
+                "Total Cost (RAW)": 6120.0,
+                "Unit Cost (9%) (SGD - PC)": 37.06,
+                "Ctn Price (9%) (SGD)": 222.36,
+                "Total Cost (SGD) (W GST)": 6670.8,
+                "TMG Selling Price per piece": 44.006,
+                "Total Selling": 7921.08,
+                "UNIT PROFIT ($)": 10.006,
+                "TOTAL PROFIT ($)": 1801.08,
+                "Profit Margin - %": 22.74
+            }
+        ]
+    }
+]
