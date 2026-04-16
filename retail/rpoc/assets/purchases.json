@@ -2,31 +2,52 @@
     {
         "vendor": "Reliance Smart",
         "date": "16 04 2026",
+        "po_number": "PO-00001",
         "items": [
             {
                 "Product Name": "Alpenliebe Caramel",
-                "Qty (CTN)": 30.0,
+                "Qty (CTN)": 57.0,
                 "Packing Size (PC)": 6.0,
-                "Total Ordered Qty": 180.0,
+                "Total Ordered Qty": 342.0,
                 "Ctn Price (SGD) (W/O GST)": 204.0,
                 "Unit Price (SGD) (W/O GST)": 34.0,
-                "Total (RAW)": 6120.0,
+                "Total (RAW)": 11628.0,
                 "Unit Cost (SGD - PC) (W/O GST)": 34.0,
-                "Total Cost (RAW)": 6120.0,
+                "Total Cost (RAW)": 11628.0,
                 "Unit Cost (9%) (SGD - PC)": 37.06,
                 "Ctn Price (9%) (SGD)": 222.36,
-                "Total Cost (SGD) (W GST)": 6670.8,
-                "TMG Selling Price per piece": 42.56,
-                "Total Selling": 7660.79,
-                "UNIT PROFIT ($)": 8.56,
-                "TOTAL PROFIT ($)": 1540.79,
-                "Profit Margin - %": 20.11
+                "Total Cost (SGD) (W GST)": 12674.52,
+                "TMG Selling Price per piece": 43.2452,
+                "Total Selling": 14789.85,
+                "UNIT PROFIT ($)": 9.2452,
+                "TOTAL PROFIT ($)": 3161.85,
+                "Profit Margin - %": 21.38
+            },
+            {
+                "Product Name": "C&C Foaming FW TwinPack 2x100ml FG",
+                "Qty (CTN)": 50.0,
+                "Packing Size (PC)": 21.0,
+                "Total Ordered Qty": 1050.0,
+                "Ctn Price (SGD) (W/O GST)": 353.0,
+                "Unit Price (SGD) (W/O GST)": 16.8095,
+                "Total (RAW)": 17650.0,
+                "Unit Cost (SGD - PC) (W/O GST)": 16.8095,
+                "Total Cost (RAW)": 17650.0,
+                "Unit Cost (9%) (SGD - PC)": 18.3224,
+                "Ctn Price (9%) (SGD)": 384.77,
+                "Total Cost (SGD) (W GST)": 19238.5,
+                "TMG Selling Price per piece": 21.1917,
+                "Total Selling": 22251.28,
+                "UNIT PROFIT ($)": 4.3822,
+                "TOTAL PROFIT ($)": 4601.28,
+                "Profit Margin - %": 20.68
             }
         ]
     },
     {
         "vendor": "Big Bazaar",
         "date": "16 04 2026",
+        "po_number": "PO-00002",
         "items": [
             {
                 "Product Name": "CIF CREAM LEMON SLPKNT UI",
@@ -41,11 +62,11 @@
                 "Unit Cost (9%) (SGD - PC)": 39.24,
                 "Ctn Price (9%) (SGD)": 235.44,
                 "Total Cost (SGD) (W GST)": 7063.2,
-                "TMG Selling Price per piece": 46.6856,
-                "Total Selling": 8403.4,
-                "UNIT PROFIT ($)": 10.6856,
-                "TOTAL PROFIT ($)": 1923.4,
-                "Profit Margin - %": 22.89
+                "TMG Selling Price per piece": 45.4081,
+                "Total Selling": 8173.46,
+                "UNIT PROFIT ($)": 9.4081,
+                "TOTAL PROFIT ($)": 1693.46,
+                "Profit Margin - %": 20.72
             },
             {
                 "Product Name": "Darlie Toothpaste Double Action 225g",
@@ -60,11 +81,63 @@
                 "Unit Cost (9%) (SGD - PC)": 21.8,
                 "Ctn Price (9%) (SGD)": 130.8,
                 "Total Cost (SGD) (W GST)": 3924.0,
-                "TMG Selling Price per piece": 25.1414,
-                "Total Selling": 4525.45,
-                "UNIT PROFIT ($)": 5.1414,
-                "TOTAL PROFIT ($)": 925.45,
-                "Profit Margin - %": 20.45
+                "TMG Selling Price per piece": 25.8907,
+                "Total Selling": 4660.33,
+                "UNIT PROFIT ($)": 5.8907,
+                "TOTAL PROFIT ($)": 1060.33,
+                "Profit Margin - %": 22.75
+            }
+        ]
+    },
+    {
+        "vendor": "Local Grocer",
+        "date": "16 04 2026",
+        "po_number": "PO-00004",
+        "items": [
+            {
+                "Product Name": "CIF CREAM PINK SLPKNT UI",
+                "Qty (CTN)": 7.0,
+                "Packing Size (PC)": 8.0,
+                "Total Ordered Qty": 56.0,
+                "Ctn Price (SGD) (W/O GST)": 329.0,
+                "Unit Price (SGD) (W/O GST)": 41.125,
+                "Total (RAW)": 2303.0,
+                "Unit Cost (SGD - PC) (W/O GST)": 41.125,
+                "Total Cost (RAW)": 2303.0,
+                "Unit Cost (9%) (SGD - PC)": 44.8263,
+                "Ctn Price (9%) (SGD)": 358.61,
+                "Total Cost (SGD) (W GST)": 2510.27,
+                "TMG Selling Price per piece": 52.1027,
+                "Total Selling": 2917.75,
+                "UNIT PROFIT ($)": 10.9777,
+                "TOTAL PROFIT ($)": 614.75,
+                "Profit Margin - %": 21.07
+            }
+        ]
+    },
+    {
+        "vendor": "Spencer's",
+        "date": "16 04 2026",
+        "po_number": "PO-00005",
+        "items": [
+            {
+                "Product Name": "Daia Detergent Powder Softener Romantic",
+                "Qty (CTN)": 0.0,
+                "Packing Size (PC)": 0.0,
+                "Total Ordered Qty": 0.0,
+                "Ctn Price (SGD) (W/O GST)": 51.0,
+                "Unit Price (SGD) (W/O GST)": 0,
+                "Total (RAW)": 0.0,
+                "Unit Cost (SGD - PC) (W/O GST)": 0,
+                "Total Cost (RAW)": 0.0,
+                "Unit Cost (9%) (SGD - PC)": 0.0,
+                "Ctn Price (9%) (SGD)": 55.59,
+                "Total Cost (SGD) (W GST)": 0.0,
+                "TMG Selling Price per piece": 0.0,
+                "Total Selling": 0.0,
+                "UNIT PROFIT ($)": 0.0,
+                "TOTAL PROFIT ($)": 0.0,
+                "Profit Margin - %": 0
             }
         ]
     }

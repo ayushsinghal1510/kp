@@ -1,10 +1,21 @@
 [
     {
-        "timestamp": "2026-04-16T11:26:20.502483",
+        "timestamp": "2026-04-16T21:13:52.879955",
+        "data": [],
+        "order_statuses": [
+            {
+                "index": 0,
+                "status": "pending"
+            }
+        ]
+    },
+    {
+        "timestamp": "2026-04-16T21:17:30.568375",
         "data": [
             {
                 "vendor": "Reliance Smart",
                 "date": "16 04 2026",
+                "po_number": "PO-00001",
                 "items": [
                     {
                         "Product Name": "Alpenliebe Caramel",
@@ -19,18 +30,38 @@
                         "Unit Cost (9%) (SGD - PC)": 37.06,
                         "Ctn Price (9%) (SGD)": 222.36,
                         "Total Cost (SGD) (W GST)": 6670.8,
-                        "TMG Selling Price per piece": 43.5052,
-                        "Total Selling": 7830.93,
-                        "UNIT PROFIT ($)": 9.5052,
-                        "TOTAL PROFIT ($)": 1710.93,
-                        "Profit Margin - %": 21.85
+                        "TMG Selling Price per piece": 43.7519,
+                        "Total Selling": 7875.35,
+                        "UNIT PROFIT ($)": 9.7519,
+                        "TOTAL PROFIT ($)": 1755.35,
+                        "Profit Margin - %": 22.29
                     }
                 ]
             },
             {
                 "vendor": "Big Bazaar",
                 "date": "16 04 2026",
+                "po_number": "PO-00002",
                 "items": [
+                    {
+                        "Product Name": "CIF CREAM LEMON SLPKNT UI",
+                        "Qty (CTN)": 30.0,
+                        "Packing Size (PC)": 6.0,
+                        "Total Ordered Qty": 180.0,
+                        "Ctn Price (SGD) (W/O GST)": 216.0,
+                        "Unit Price (SGD) (W/O GST)": 36.0,
+                        "Total (RAW)": 6480.0,
+                        "Unit Cost (SGD - PC) (W/O GST)": 36.0,
+                        "Total Cost (RAW)": 6480.0,
+                        "Unit Cost (9%) (SGD - PC)": 39.24,
+                        "Ctn Price (9%) (SGD)": 235.44,
+                        "Total Cost (SGD) (W GST)": 7063.2,
+                        "TMG Selling Price per piece": 45.4081,
+                        "Total Selling": 8173.46,
+                        "UNIT PROFIT ($)": 9.4081,
+                        "TOTAL PROFIT ($)": 1693.46,
+                        "Profit Margin - %": 20.72
+                    },
                     {
                         "Product Name": "Darlie Toothpaste Double Action 225g",
                         "Qty (CTN)": 30.0,
@@ -44,17 +75,24 @@
                         "Unit Cost (9%) (SGD - PC)": 21.8,
                         "Ctn Price (9%) (SGD)": 130.8,
                         "Total Cost (SGD) (W GST)": 3924.0,
-                        "TMG Selling Price per piece": 25.1883,
-                        "Total Selling": 4533.9,
-                        "UNIT PROFIT ($)": 5.1883,
-                        "TOTAL PROFIT ($)": 933.9,
-                        "Profit Margin - %": 20.6
+                        "TMG Selling Price per piece": 25.8907,
+                        "Total Selling": 4660.33,
+                        "UNIT PROFIT ($)": 5.8907,
+                        "TOTAL PROFIT ($)": 1060.33,
+                        "Profit Margin - %": 22.75
                     }
                 ]
             }
         ],
         "order_statuses": [
-            "pending"
+            {
+                "index": 0,
+                "status": "completed"
+            },
+            {
+                "index": 1,
+                "status": "pending"
+            }
         ]
     }
 ]

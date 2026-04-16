@@ -1,7 +1,7 @@
 [
     {
         "filename": "Screenshot 2026-04-15 161129.png",
-        "name": "Order_112603",
+        "name": "Order_211323",
         "supplier": "MENG CHONG FOODSTUFFS PTE LTD",
         "purchase_order_date": "06.04.26",
         "orders": [
@@ -22,6 +22,36 @@
             }
         ],
         "status": "completed",
-        "timestamp": "2026-04-16T11:26:03.707665"
+        "timestamp": "2026-04-16T21:13:23.010134"
+    },
+    {
+        "filename": "manual",
+        "name": "tep1",
+        "supplier": "Manual",
+        "purchase_order_date": "2026-04-16",
+        "orders": [
+            {
+                "product_name": "C&C Foaming FW TwinPack 2x100ml FG",
+                "quantity": 50.0,
+                "packing_size": 21.0
+            },
+            {
+                "product_name": "Alpenliebe Caramel",
+                "quantity": 27.0,
+                "packing_size": 6.0
+            },
+            {
+                "product_name": "CIF CREAM PINK SLPKNT UI     ",
+                "quantity": 7.0,
+                "packing_size": 8.0
+            },
+            {
+                "product_name": "Daia Detergent Powder Softener Romantic",
+                "quantity": 0.0,
+                "packing_size": 0.0
+            }
+        ],
+        "status": "completed",
+        "timestamp": "2026-04-16T21:15:52.450362"
     }
 ]
