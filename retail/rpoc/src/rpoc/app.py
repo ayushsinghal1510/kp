@@ -245,25 +245,76 @@ with tab2:
     if prompt := st.chat_input("Ask the Data Agent..."):
         st.session_state.chat_history.append({"role": "user", "content": prompt})
         with st.chat_message("user"): st.markdown(prompt)
-        retries, success = 0, False
-        status = st.status("Agent is working...", expanded=True)
-        while retries < 3:
-            history_context = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history[-5:]])
-            coder_prompt = f"You are a Python Data Agent managing 'df'.\nCOLUMNS: {list(st.session_state.df.columns)}\nHISTORY: {history_context}\nTASK: {prompt}\nCRITICAL RULES: 1. For updates, use df.loc. 2. If Profit Margin updated, recalculate Final Price. 3. Return ONLY ```python blocks."
-            res = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=[{"role": "system", "content": coder_prompt}], temperature=0)
-            code_match = re.search(r"```python\n(.*?)\n```", res.choices[0].message.content, re.DOTALL)
-            if not code_match: retries += 1; continue
-            code = code_match.group(1)
-            run_ok, out, err = execute_code(code)
-            rev_prompt = f"User Task: {prompt}\nCode Ran: {code}\nResult: {out if run_ok else err}\nFriendly response: 'SUCCESS: [Answer]' or 'RETRY: [Reason]'"
-            rev_res = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=[{"role": "user", "content": rev_prompt}], temperature=0)
-            decision = rev_res.choices[0].message.content
-            if "RETRY" in decision: retries += 1
-            else:
-                st.session_state.chat_history.append({"role": "assistant", "content": decision.replace("SUCCESS:", "").strip()})
-                success = True; break
-        status.update(label="Complete!", state="complete", expanded=False)
-        if success: st.rerun()
+
+        # Fuzzy match locally — only send top candidates to LLM, not the full list
+        product_names = st.session_state.df['Product Name'].dropna().tolist() if 'Product Name' in st.session_state.df.columns else []
+        close_matches = difflib.get_close_matches(prompt, product_names, n=5, cutoff=0.3)
+        prompt_words = [w for w in prompt.lower().split() if len(w) > 3]
+        substr_matches = [p for p in product_names if any(w in p.lower() for w in prompt_words)]
+        candidate_names = list(dict.fromkeys(close_matches + substr_matches))[:10]
+
+        if candidate_names:
+            fuzzy_hint = (
+                f"IMPORTANT: The user may have typos or shorthand in product names. "
+                f"Based on their query, the most likely matching products are: {candidate_names}. "
+                f"Use one of these when filtering df (case-insensitive str.contains or exact match). "
+                f"Never do a bare exact match on the raw user input."
+            )
+        else:
+            fuzzy_hint = (
+                f"IMPORTANT: Use case-insensitive partial string matching (str.contains) when filtering by product name, "
+                f"never a bare exact match on the raw user input."
+            )
+
+        retries, final_response = 0, None
+        with st.chat_message("assistant"):
+            with st.spinner("Agent is working..."):
+                while retries < 3:
+                    history_context = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history[-5:]])
+                    coder_prompt = (
+                        f"You are a Python Data Agent managing 'df'.\n"
+                        f"COLUMNS: {list(st.session_state.df.columns)}\n"
+                        f"HISTORY: {history_context}\n"
+                        f"TASK: {prompt}\n"
+                        f"{fuzzy_hint}\n"
+                        f"CRITICAL RULES:\n"
+                        f"1. For updates, use df.loc.\n"
+                        f"2. If Profit Margin updated, recalculate Final Price.\n"
+                        f"3. If a product is not found after fuzzy matching, print a clear message like: 'Could not find product: <name>'\n"
+                        f"4. Always print your result so the reviewer can see it.\n"
+                        f"5. Return ONLY ```python blocks."
+                    )
+                    res = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=[{"role": "system", "content": coder_prompt}], temperature=0)
+                    code_match = re.search(r"```python\n(.*?)\n```", res.choices[0].message.content, re.DOTALL)
+                    if not code_match: retries += 1; continue
+                    code = code_match.group(1)
+                    run_ok, out, err = execute_code(code)
+
+                    
+                    rev_prompt = (
+                        f"User Task: {prompt}\n"
+                        f"Code Ran: {code}\n"
+                        f"Result: {out if run_ok else err}\n\n"
+                        f"Write a short, direct response (1-2 sentences max).\n"
+                        f"- If successful, start with 'SUCCESS:' and state the answer directly.\n"
+                        f"- If product not found, start with 'SUCCESS:' and say it wasn't found, check spelling.\n"
+                        f"- Only say 'RETRY: [reason]' if there was a real code crash or exception.\n"
+                        f"- Never show raw Python errors or code to the user."
+                    )
+                    rev_res = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=[{"role": "user", "content": rev_prompt}], temperature=0)
+                    decision = rev_res.choices[0].message.content
+                    if "RETRY" in decision:
+                        retries += 1
+                    else:
+                        final_response = decision.replace("SUCCESS:", "").strip()
+                        break
+
+                if not final_response:
+                    final_response = "I wasn't able to find what you were looking for. Could you double-check the product name or rephrase your question? I'll do my best to help!"
+
+            st.markdown(final_response)
+            st.download_button(label="📥 Download PDF", data=create_pdf(final_response), file_name=f"res_{len(st.session_state.chat_history)}.pdf", key=f"chat_new_{len(st.session_state.chat_history)}")
+            st.session_state.chat_history.append({"role": "assistant", "content": final_response})
 
 with tab3:
     st.header("Ordering Lists")

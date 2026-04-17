@@ -1,6 +1,6 @@
 [
     {
-        "timestamp": "2026-04-16T21:13:52.879955",
+        "timestamp": "2026-04-17T07:10:16.242617",
         "data": [],
         "order_statuses": [
             {
@@ -10,76 +10,76 @@
         ]
     },
     {
-        "timestamp": "2026-04-16T21:17:30.568375",
+        "timestamp": "2026-04-17T07:13:11.199138",
         "data": [
             {
                 "vendor": "Reliance Smart",
-                "date": "16 04 2026",
+                "date": "17 04 2026",
                 "po_number": "PO-00001",
                 "items": [
                     {
                         "Product Name": "Alpenliebe Caramel",
-                        "Qty (CTN)": 30.0,
+                        "Qty (CTN)": 5.0,
                         "Packing Size (PC)": 6.0,
-                        "Total Ordered Qty": 180.0,
+                        "Total Ordered Qty": 30.0,
                         "Ctn Price (SGD) (W/O GST)": 204.0,
                         "Unit Price (SGD) (W/O GST)": 34.0,
-                        "Total (RAW)": 6120.0,
+                        "Total (RAW)": 1020.0,
                         "Unit Cost (SGD - PC) (W/O GST)": 34.0,
-                        "Total Cost (RAW)": 6120.0,
+                        "Total Cost (RAW)": 1020.0,
                         "Unit Cost (9%) (SGD - PC)": 37.06,
                         "Ctn Price (9%) (SGD)": 222.36,
-                        "Total Cost (SGD) (W GST)": 6670.8,
-                        "TMG Selling Price per piece": 43.7519,
-                        "Total Selling": 7875.35,
-                        "UNIT PROFIT ($)": 9.7519,
-                        "TOTAL PROFIT ($)": 1755.35,
-                        "Profit Margin - %": 22.29
+                        "Total Cost (SGD) (W GST)": 1111.8,
+                        "TMG Selling Price per piece": 42.7694,
+                        "Total Selling": 1283.08,
+                        "UNIT PROFIT ($)": 8.7694,
+                        "TOTAL PROFIT ($)": 263.08,
+                        "Profit Margin - %": 20.5
                     }
                 ]
             },
             {
                 "vendor": "Big Bazaar",
-                "date": "16 04 2026",
+                "date": "17 04 2026",
                 "po_number": "PO-00002",
                 "items": [
                     {
                         "Product Name": "CIF CREAM LEMON SLPKNT UI",
-                        "Qty (CTN)": 30.0,
+                        "Qty (CTN)": 5.0,
                         "Packing Size (PC)": 6.0,
-                        "Total Ordered Qty": 180.0,
+                        "Total Ordered Qty": 30.0,
                         "Ctn Price (SGD) (W/O GST)": 216.0,
                         "Unit Price (SGD) (W/O GST)": 36.0,
-                        "Total (RAW)": 6480.0,
+                        "Total (RAW)": 1080.0,
                         "Unit Cost (SGD - PC) (W/O GST)": 36.0,
-                        "Total Cost (RAW)": 6480.0,
+                        "Total Cost (RAW)": 1080.0,
                         "Unit Cost (9%) (SGD - PC)": 39.24,
                         "Ctn Price (9%) (SGD)": 235.44,
-                        "Total Cost (SGD) (W GST)": 7063.2,
-                        "TMG Selling Price per piece": 45.4081,
-                        "Total Selling": 8173.46,
-                        "UNIT PROFIT ($)": 9.4081,
-                        "TOTAL PROFIT ($)": 1693.46,
-                        "Profit Margin - %": 20.72
+                        "Total Cost (SGD) (W GST)": 1177.2,
+                        "TMG Selling Price per piece": 45.7505,
+                        "Total Selling": 1372.52,
+                        "UNIT PROFIT ($)": 9.7505,
+                        "TOTAL PROFIT ($)": 292.52,
+                        "Profit Margin - %": 21.31
                     },
                     {
                         "Product Name": "Darlie Toothpaste Double Action 225g",
-                        "Qty (CTN)": 30.0,
+                        "Qty (CTN)": 5.0,
                         "Packing Size (PC)": 6.0,
-                        "Total Ordered Qty": 180.0,
+                        "Total Ordered Qty": 30.0,
                         "Ctn Price (SGD) (W/O GST)": 120.0,
                         "Unit Price (SGD) (W/O GST)": 20.0,
-                        "Total (RAW)": 3600.0,
+                        "Total (RAW)": 600.0,
                         "Unit Cost (SGD - PC) (W/O GST)": 20.0,
-                        "Total Cost (RAW)": 3600.0,
+                        "Total Cost (RAW)": 600.0,
                         "Unit Cost (9%) (SGD - PC)": 21.8,
                         "Ctn Price (9%) (SGD)": 130.8,
-                        "Total Cost (SGD) (W GST)": 3924.0,
-                        "TMG Selling Price per piece": 25.8907,
-                        "Total Selling": 4660.33,
-                        "UNIT PROFIT ($)": 5.8907,
-                        "TOTAL PROFIT ($)": 1060.33,
-                        "Profit Margin - %": 22.75
+                        "Total Cost (SGD) (W GST)": 654.0,
+                        "TMG Selling Price per piece": 25.0575,
+                        "Total Selling": 751.72,
+                        "UNIT PROFIT ($)": 5.0575,
+                        "TOTAL PROFIT ($)": 151.72,
+                        "Profit Margin - %": 20.18
                     }
                 ]
             }

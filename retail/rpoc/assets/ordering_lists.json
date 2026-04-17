@@ -1,57 +1,62 @@
 [
     {
         "filename": "Screenshot 2026-04-15 161129.png",
-        "name": "Order_211323",
+        "name": "Order_071011",
         "supplier": "MENG CHONG FOODSTUFFS PTE LTD",
         "purchase_order_date": "06.04.26",
         "orders": [
             {
                 "product_name": "Alpenliebe Caramel",
-                "quantity": 30,
+                "quantity": 5,
                 "packing_size": 6
             },
             {
                 "product_name": "CIF CREAM LEMON SLPKNT UI",
-                "quantity": 30,
+                "quantity": 5,
                 "packing_size": 6
             },
             {
                 "product_name": "Darlie Toothpaste Double Action 225g",
-                "quantity": 30,
+                "quantity": 5,
                 "packing_size": 6
             }
         ],
         "status": "completed",
-        "timestamp": "2026-04-16T21:13:23.010134"
+        "timestamp": "2026-04-17T07:10:11.127457"
     },
     {
         "filename": "manual",
-        "name": "tep1",
+        "name": "tep",
         "supplier": "Manual",
-        "purchase_order_date": "2026-04-16",
+        "purchase_order_date": "2026-04-17",
         "orders": [
             {
                 "product_name": "C&C Foaming FW TwinPack 2x100ml FG",
-                "quantity": 50.0,
-                "packing_size": 21.0
-            },
-            {
-                "product_name": "Alpenliebe Caramel",
-                "quantity": 27.0,
+                "quantity": 23.0,
                 "packing_size": 6.0
             },
             {
-                "product_name": "CIF CREAM PINK SLPKNT UI     ",
-                "quantity": 7.0,
-                "packing_size": 8.0
+                "product_name": "Alpenliebe Caramel",
+                "quantity": 4.0,
+                "packing_size": 5.0
             },
             {
-                "product_name": "Daia Detergent Powder Softener Romantic",
-                "quantity": 0.0,
-                "packing_size": 0.0
+                "product_name": "CIF CREAM LEMON SLPKNT UI ",
+                "quantity": 12.0,
+                "packing_size": 6.0
+            },
+            {
+                "product_name": "C&C Deep Action Cleanser 100g",
+                "quantity": 56.0,
+                "packing_size": 32.0
+            },
+            {
+                "product_name": "CIF CREAM ORIGINAL SLPKNT UI ",
+                "quantity": 23.0,
+                "packing_size": 23.0
             }
         ],
         "status": "completed",
-        "timestamp": "2026-04-16T21:15:52.450362"
+        "timestamp": "2026-04-17T07:11:11.862088"
     }
 ]
