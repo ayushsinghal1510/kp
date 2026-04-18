@@ -1,62 +1,32 @@
 [
     {
-        "filename": "Screenshot 2026-04-15 161129.png",
-        "name": "Order_071011",
-        "supplier": "MENG CHONG FOODSTUFFS PTE LTD",
-        "purchase_order_date": "06.04.26",
-        "orders": [
-            {
-                "product_name": "Alpenliebe Caramel",
-                "quantity": 5,
-                "packing_size": 6
-            },
-            {
-                "product_name": "CIF CREAM LEMON SLPKNT UI",
-                "quantity": 5,
-                "packing_size": 6
-            },
-            {
-                "product_name": "Darlie Toothpaste Double Action 225g",
-                "quantity": 5,
-                "packing_size": 6
-            }
-        ],
-        "status": "completed",
-        "timestamp": "2026-04-17T07:10:11.127457"
-    },
-    {
         "filename": "manual",
-        "name": "tep",
+        "name": "qwe",
         "supplier": "Manual",
-        "purchase_order_date": "2026-04-17",
+        "purchase_order_date": "2026-04-18",
         "orders": [
             {
-                "product_name": "C&C Foaming FW TwinPack 2x100ml FG",
-                "quantity": 23.0,
-                "packing_size": 6.0
+                "product_name": "ICE COOL BIRDS NEST 300ML ",
+                "quantity": 234.0,
+                "packing_size": 24.0
             },
             {
-                "product_name": "Alpenliebe Caramel",
-                "quantity": 4.0,
-                "packing_size": 5.0
+                "product_name": "CHA PAI POMELO GREEN TEA 500ML              ",
+                "quantity": 42.0,
+                "packing_size": 15.0
             },
             {
-                "product_name": "CIF CREAM LEMON SLPKNT UI ",
-                "quantity": 12.0,
-                "packing_size": 6.0
+                "product_name": "CHA PAI PEACH OOLONG 500ML        ",
+                "quantity": 123.0,
+                "packing_size": 15.0
             },
             {
-                "product_name": "C&C Deep Action Cleanser 100g",
-                "quantity": 56.0,
-                "packing_size": 32.0
-            },
-            {
-                "product_name": "CIF CREAM ORIGINAL SLPKNT UI ",
-                "quantity": 23.0,
-                "packing_size": 23.0
+                "product_name": "ICE COOL YOUNG COCONUT W P 310ML ",
+                "quantity": 35.0,
+                "packing_size": 24.0
             }
         ],
         "status": "completed",
-        "timestamp": "2026-04-17T07:11:11.862088"
+        "timestamp": "2026-04-18T03:54:24.899083"
     }
 ]
