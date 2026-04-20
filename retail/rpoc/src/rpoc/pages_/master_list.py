@@ -166,7 +166,12 @@ if not st.session_state.df.is_empty() :
         ]).drop(['__tmg_sell', '__tmg_promo', '__pack_price', '__pack_size', '__gst', '__unit_cost_wgst'])
     # ──────────────────────────────────────────────────────────────────
 
+    pandas_display_df = display_df.to_pandas()
+    
+    # Shift the index to start at 1 instead of 0
+    pandas_display_df.index = pandas_display_df.index + 1
+
     st.dataframe(
-        display_df.to_pandas() , 
+        pandas_display_df , 
         use_container_width = True
     )

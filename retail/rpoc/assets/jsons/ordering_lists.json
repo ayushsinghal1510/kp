@@ -6,17 +6,12 @@
         "purchase_order_date": "2026-04-20",
         "orders": [
             {
-                "product_name": "CHA PAI GRAPE OOLONG TEA 500ML",
-                "quantity": 15.0,
-                "packing_size": 15.0
-            },
-            {
-                "product_name": "CHA PAI PEACH OOLONG 500ML",
-                "quantity": 25.0,
-                "packing_size": 15.0
+                "product_name": "100 PLUS 1.5L",
+                "quantity": 53.0,
+                "packing_size": 12.0
             }
         ],
         "status": "completed",
-        "timestamp": "2026-04-20T08:47:01.844366"
+        "timestamp": "2026-04-20T09:36:56.164024"
     }
 ]
