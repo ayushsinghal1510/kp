@@ -1,0 +1,22 @@
+[
+    {
+        "filename": "manual",
+        "name": "tep1",
+        "supplier": "Manual",
+        "purchase_order_date": "2026-04-20",
+        "orders": [
+            {
+                "product_name": "CHA PAI GRAPE OOLONG TEA 500ML",
+                "quantity": 15.0,
+                "packing_size": 15.0
+            },
+            {
+                "product_name": "CHA PAI PEACH OOLONG 500ML",
+                "quantity": 25.0,
+                "packing_size": 15.0
+            }
+        ],
+        "status": "completed",
+        "timestamp": "2026-04-20T08:47:01.844366"
+    }
+]

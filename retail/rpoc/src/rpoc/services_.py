@@ -1,106 +1,74 @@
-import base64
-from io import StringIO
 import json
-import sys
-
+import numpy as np
 import pandas as pd
+from polars import DataFrame
 
-from fpdf import FPDF
-from groq import Groq
-from datetime import datetime
 
-def load_json(path : str) -> list : 
 
-    with open(path) as json_file : 
-        return json.load(json_file)
+def detect_gst_column(price_data_columns):
+    for variant in GST_COLUMN_VARIANTS:
+        if variant in price_data_columns:
+            return variant
+    return None
 
-def save_json(path : str , data : list | dict) -> None : 
+def _is_blank(v : str | None | float) -> bool : 
 
-    with open(path , 'w') as json_file : 
-        json.dump(data , json_file , indent = 4)
+    if v is None : 
+        return True
 
-def create_pdf(text : str , config : dict) -> FPDF : 
+    if isinstance(v , float) and (np.isnan(v) or np.isinf(v)) : 
+        return True
 
-    pdf : FPDF = FPDF()
-    pdf.add_page()
+    if str(v).strip() in ('' , 'nan' , 'NaN' , 'None') : 
+        return True
 
-    pdf.set_font(config['font'] , size = config['size'])
+    return False
 
-    pdf.multi_cell(
-        0 , 10 , 
-        txt = text.encode('latin-1' , 'replace').decode('latin-1')
-    )
+def generate_key(row) : 
 
-    return pdf.output(dest = 'S').encode('latin-1')
+    prod = str(row.get('Product Name' , 'Unknown')).lower().strip()
+    supp = str(row.get('Supplier' , 'Unknown')).lower().strip()
 
-def process_order_image(
-    uploaded_file , 
-    prompt : str , 
-    groq_client : Groq , 
-    config : dict
-) -> dict : 
+    return f'{prod}|{supp}'
 
-    base64_image : str = base64.b64encode(uploaded_file.getvalue()).decode('utf-8')
-    
-    completion = groq_client.chat.completions.create(
-        model = config['model'] , 
-        messages = [
-            {
-                'role' : 'system' , 
-                'content' : prompt
-            } , 
-            {
-                'role' : 'user' , 
-                'content' : [
-                    {
-                        'type' : 'image_url' , 
-                        'image_url' : {'url' : f'data:image/jpeg;base64,{base64_image}'}
-                    }
-                ]
-            }
-        ] , 
-        response_format = config['response-format']
-    )
+# ── Persistence ───────────────────────────────────────────────
 
-    data = json.loads(completion.choices[0].message.content)
 
-    return {
-        'filename' : uploaded_file.name , 
-        'name' : f'Order_{datetime.now().strftime('%H%M%S')}' , 
-        'supplier' : data.get('supplier') , 
-        'purchase_order_date' : data.get('purchase_order_date') , 
-        'orders' : data.get('orders' , []) , 
-        'status' : 'pending' , 
-        'timestamp' : datetime.now().isoformat()
-    }
+def load_csv(csv_path : str) -> DataFrame : 
+    return pd.read_csv(csv_path)
 
-def execute_code(
-    code_str : str , 
-    st
-) -> tuple[bool , str | None , str | None] : 
+def save_csv(df : DataFrame , csv_path : str) -> None : 
+    df.to_csv(csv_path , index = False)
 
-    output : StringIO = StringIO()
+# ── Helper: packing size lookup ───────────────────────────────
 
-    sys.stdout = output
 
-    context = {
-        'pd' : pd , 
-        'st' : st , 
-        'df' : st.session_state.df.copy()
-    }
 
-    try : 
 
-        exec(code_str , context , context)
 
-        st.session_state.df = context['df']
+# ── Safe value helper (prevents NaN/INF in xlsxwriter) ────────
 
-        # st.session_state.df.to_csv(CSV_PATH, index=False)
 
-        return True , output.getvalue() , None
+# =============================================================
+# EXCEL EXPORT — Exact Tian Ma Group Holdings PO format
+# =============================================================
 
-    except Exception as e : 
-        return False , None , str(e)
 
-    finally : 
-        sys.stdout = sys.__stdout__
+
+
+
+# =============================================================
+# PDF EXPORT — auto-scaled to fit A4 landscape, no overflow
+# =============================================================
+
+
+# =============================================================
+# PURCHASE METRICS
+# =============================================================
+
+
+def get_active_gst_details(df):
+    """Returns (rate, column_name, label)"""
+    if 'Unit Cost (9.16%)\n(SGD - PC)' in df.columns and df['Unit Cost (9.16%)\n(SGD - PC)'].sum() > 0:
+        return 9.16, 'Unit Cost (9.16%)\n(SGD - PC)', '9.16%'
+    return 9.0, 'Unit Cost (9%)\n(SGD - PC)', '9%'

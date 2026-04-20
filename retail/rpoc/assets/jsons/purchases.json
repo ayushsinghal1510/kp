@@ -1,0 +1,35 @@
+[
+    {
+        "Supplier": "SHENG SHENG F&B INDUSTRIES PTE LTD",
+        "date": "20 04 2026",
+        "po_number": "PO-00003",
+        "products": [
+            {
+                "Product Name": "CHA PAI GRAPE OOLONG TEA 500ML",
+                "Qty": 15.0,
+                "Packing Size": 15.0,
+                "Total Ordered Qty": 225.0,
+                "Ctn Price WOGST": 10.83,
+                "Unit Price WOGST": 0.7222,
+                "Total WOGST": 162.5,
+                "GST": 9.0,
+                "Ctn Price WGST": 11.81,
+                "Unit Cost WGST": 0.7872,
+                "Total Cost WGST": 177.12
+            },
+            {
+                "Product Name": "CHA PAI PEACH OOLONG 500ML",
+                "Qty": 25.0,
+                "Packing Size": 15.0,
+                "Total Ordered Qty": 375.0,
+                "Ctn Price WOGST": 10.83,
+                "Unit Price WOGST": 0.7222,
+                "Total WOGST": 270.83,
+                "GST": 9.0,
+                "Ctn Price WGST": 11.81,
+                "Unit Cost WGST": 0.7872,
+                "Total Cost WGST": 295.21
+            }
+        ]
+    }
+]
