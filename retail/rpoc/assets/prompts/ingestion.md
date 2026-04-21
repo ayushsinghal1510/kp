@@ -1,38 +1,35 @@
-Extract product pricing information from the attached file.
+Extract product pricing information from the attached file with absolute precision. 
 
-CRITICAL INSTRUCTIONS:
-1. PRODUCT NAME: Always extract the LONGEST, most descriptive version of the product name found. Try to avoid any short forms if possible, use full names (e.g., if you see 'URC' and 'Universal Robina Corporation', use the latter. Include weight/descriptors like '85gx10x3').
-2. NO. COLUMN: Generate a sequential index starting from 1 for each product found. Do not leave as null.
-3. GST DETECTION: Look for GST percentages (9% or 9.16%). If explicitly mentioned, set the 'GST' field to that number. If not, try to calculate the GST from the mathematics.
-4. CALCULATIONS: 
-    - Unit Price = Ctn Price / Packing Size.
-5. SUPPLIER: Understand the difference between a purchase order and the invoice. Your first intuition should be finding a high hint of the supplier itself (e.g., if "Supplier:" or "Sold By:" is written). If the keyword is there but nothing after it, then it is "Unknown". If no keyword is provided, take the main company name issuing the invoice.
-6. ZERO PRICES: Some products can be there but the price can be 0. This should be considered and they shouldn't be removed. Keep their price 0 but keep the products.
-7. SELLING & PROMOTION PRICES (CRITICAL & MANDATORY):
-    - Search the ENTIRE row for each product. Selling prices are usually on the right side of the document.
-    - The header might be split across multiple lines (e.g., "TMG\nSelling\nPrice"). Look for ANY variant: "TMG Selling Price", "Selling Price", "Unit Sell", "RSP", or "Retail Price".
-    - STRIP CURRENCY SYMBOLS. If you see "$1.50", extract `1.5`.
-    - If you see a massive number (e.g., $2160.00), that is the TOTAL selling price. You MUST divide it by the Total Qty or Packing Size to get the UNIT TMG Selling Price.
-    - NEVER default to 0 if a selling price is visible anywhere on that row.
-    - Identify the "TMG Promotion Price" per UNIT. If missing, duplicate the "TMG Selling Price" into this field.
-Return the data in this JSON format ONLY:
+### CRITICAL EXTRACTION RULES:
+1. **PRODUCT NAME:** Extract the longest, most descriptive name. Include weight/quantity descriptors (e.g., 'BAKE STORY KOKOPIE... 20Gx10PCSx9BAGS'). 
+2. **STRICT DATA INTEGRITY (NO HALLUCINATIONS):** Only extract data that is visually present. Do NOT "invent" or assume values for Profit, Selling Price, or Promotion Price if they are not explicitly written or clearly labeled in a column. If a value is not found, use `null` or `0`.
+3. **PACKING SIZE LOGIC:** Infer the number of units per carton from the product description or packing column. 
+    - **Rule:** If a multiplier string is present (e.g., '15GX8SX10' or '20Gx10PCSx9BAGS'), extract the **FINAL number** in the sequence as the Packing Size. 
+    - *Example:* '20Gx10PCSx9BAGS' → Packing Size is **9**.
+    - *Example:* '15GX8SX10' → Packing Size is **10**.
+4. **PACK PRICE:** This is the price per carton/bag. In standard layouts (Qty | Unit | Price | Total), extract the 'Price' value listed before the line total.
+5. **ZERO PRICES & FOC:** Include products even if the price is 0.00 or marked as 'FOC' (Free of Charge). Do not omit these entries.
+6. **SUPPLIER:** Identify the issuing company (the "Seller"). Look for "Supplier:", "Sold By:", or the primary header/letterhead. If not found, return "Unknown".
+7. **GST DETECTION:** Look for 9% or 9.16%. Return as a decimal (e.g., 0.09). If not explicitly stated, attempt to calculate from the difference between Subtotal and Total.
+8. **SELLING & PROMOTION PRICES:** - Look for headers like "TMG Selling Price", "RSP", "Retail", or "Unit Sell". 
+    - **Calculations:** If a "Total Selling Price" is given for the whole row, you MUST divide it by the Total Quantity or Packing Size to get the **Unit** price.
+    - **Fallback:** If "TMG Promotion Price" is missing, duplicate the "TMG Selling Price". If BOTH are missing, use `null`.
+
+### OUTPUT FORMAT (JSON ONLY):
 {
     "supplier": "string",
     "products": [
         {
-            "Code": "unique identifier",
-            "Product Name": "Full name",
-            "Packing Size": "Infer units per carton (e.g., from '70gx20', extract 20) else 1",
-            "Pack Price": "Price per carton/product", 
-            "Pack Price Currency": "If defined in the document than the currency code else SGD",
-            "GST": "GST Percentage (e.g., 0.09)", // always give percentage in points, like 9 percent becomes 0.09, 100 percent becomes 1
-            "TMG Selling Price": "Unit selling price (Float/Number)",
-            "TMG Promotion Price": "Unit promotion price (Float/Number) - fallback to TMG Selling Price if not found"
+            "Code": "unique identifier/EAN",
+            "Product Name": "Full descriptive name",
+            "Packing Size": "Integer (The end number of the multiplier string)",
+            "Pack Price": "Float/Number (Price per carton)", 
+            "Pack Price Currency": "Currency code (Default: SGD)",
+            "GST": "Float (e.g., 0.09)", 
+            "TMG Selling Price": "Unit selling price (Float or null)",
+            "TMG Promotion Price": "Unit promotion price (Float or null)"
         }
     ]
 }
 
-Rules:
-- If a value is missing, use null or 0 as appropriate.
-- If it's an image/PDF, use visual OCR. If it's Excel/CSV, treat it as structured data.
-- Strict Rule: The information is highly sensitive and should be extracted exactly as it is written. No other information or product should be made or created by yourself.
+Strict Rule: This is sensitive financial data. No other information or products should be created or inferred beyond what is visible in the document.
