@@ -41,8 +41,6 @@ if st.button('Process & Import Files') and uploaded_files :
                 st.session_state.gemini_client
             )
 
-            st.write(data)
-
             for row in data:
                 row['Filename'] = file.name
 
