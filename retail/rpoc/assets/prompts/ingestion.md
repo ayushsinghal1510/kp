@@ -14,13 +14,14 @@ Extract product pricing information from the attached file with absolute precisi
 8. **SELLING & PROMOTION PRICES:** - Look for headers like "TMG Selling Price", "RSP", "Retail", or "Unit Sell". 
     - **Calculations:** If a "Total Selling Price" is given for the whole row, you MUST divide it by the Total Quantity or Packing Size to get the **Unit** price.
     - **Fallback:** If "TMG Promotion Price" is missing, duplicate the "TMG Selling Price". If BOTH are missing, use `null`.
+9. **BARCODE:** Extract the product barcode or unique item code if present (often a long numerical string or alphanumeric SKU). If not found, return an empty string.
 
 ### OUTPUT FORMAT (JSON ONLY):
 {
     "supplier": "string",
     "products": [
         {
-            "Code": "unique identifier/EAN",
+            "Barcode": "String (The barcode or SKU, or empty string)",
             "Product Name": "Full descriptive name",
             "Packing Size": "Integer (The end number of the multiplier string)",
             "Pack Price": "Float/Number (Price per carton)", 

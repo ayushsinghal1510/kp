@@ -18,5 +18,110 @@
                 "Total Cost WGST": 668.22
             }
         ]
+    },
+    {
+        "Supplier": "SHENG SHENG F&B INDUSTRIES PTE LTD",
+        "date": "28 04 2026",
+        "po_number": "PO-00002",
+        "products": [
+            {
+                "Product Name": "Cha Pai Grapefruit Jasmine Tea",
+                "Qty": 24.0,
+                "Packing Size": 12.0,
+                "Total Ordered Qty": 288.0,
+                "Ctn Price WOGST": 13.0,
+                "Unit Price WOGST": 1.0833,
+                "Total WOGST": 312.0,
+                "GST": 9.0,
+                "Ctn Price WGST": 14.17,
+                "Unit Cost WGST": 1.1808,
+                "Total Cost WGST": 340.08
+            },
+            {
+                "Product Name": "Ice Cool Young Coconut with Pulp",
+                "Qty": 36.0,
+                "Packing Size": 12.0,
+                "Total Ordered Qty": 432.0,
+                "Ctn Price WOGST": 15.0,
+                "Unit Price WOGST": 1.25,
+                "Total WOGST": 540.0,
+                "GST": 9.0,
+                "Ctn Price WGST": 16.35,
+                "Unit Cost WGST": 1.3625,
+                "Total Cost WGST": 588.6
+            },
+            {
+                "Product Name": "Kangshifu Ice Black Tea Lemon Flavour",
+                "Qty": 12.0,
+                "Packing Size": 12.0,
+                "Total Ordered Qty": 144.0,
+                "Ctn Price WOGST": 8.17,
+                "Unit Price WOGST": 0.6806,
+                "Total WOGST": 98.0,
+                "GST": 9.0,
+                "Ctn Price WGST": 8.9,
+                "Unit Cost WGST": 0.7418,
+                "Total Cost WGST": 106.82
+            },
+            {
+                "Product Name": "Kangshifu Honey Pomelo Drink",
+                "Qty": 14.0,
+                "Packing Size": 12.0,
+                "Total Ordered Qty": 168.0,
+                "Ctn Price WOGST": 8.17,
+                "Unit Price WOGST": 0.6806,
+                "Total WOGST": 114.33,
+                "GST": 9.0,
+                "Ctn Price WGST": 8.9,
+                "Unit Cost WGST": 0.7418,
+                "Total Cost WGST": 124.62
+            }
+        ]
+    },
+    {
+        "Supplier": "WEN KEN MARKETING (S) PTE LTD",
+        "date": "28 04 2026",
+        "po_number": "PO-00003",
+        "products": [
+            {
+                "Product Name": "3 Legs CW 24 x 320ml (Lime Flavor) -NL",
+                "Qty": 23.0,
+                "Packing Size": 24.0,
+                "Total Ordered Qty": 552.0,
+                "Ctn Price WOGST": 24.0,
+                "Unit Price WOGST": 1.0,
+                "Total WOGST": 552.0,
+                "GST": 9.0,
+                "Ctn Price WGST": 26.16,
+                "Unit Cost WGST": 1.09,
+                "Total Cost WGST": 601.68
+            },
+            {
+                "Product Name": "3 Legs CW 24 x 320ml (Lychee Flavor) -NL",
+                "Qty": 35.0,
+                "Packing Size": 24.0,
+                "Total Ordered Qty": 840.0,
+                "Ctn Price WOGST": 24.0,
+                "Unit Price WOGST": 1.0,
+                "Total WOGST": 840.0,
+                "GST": 9.0,
+                "Ctn Price WGST": 26.16,
+                "Unit Cost WGST": 1.09,
+                "Total Cost WGST": 915.6
+            },
+            {
+                "Product Name": "3 Legs CW 24 x 320ml (Guava Flavor) -NL",
+                "Qty": 56.0,
+                "Packing Size": 24.0,
+                "Total Ordered Qty": 1344.0,
+                "Ctn Price WOGST": 24.0,
+                "Unit Price WOGST": 1.0,
+                "Total WOGST": 1344.0,
+                "GST": 9.0,
+                "Ctn Price WGST": 26.16,
+                "Unit Cost WGST": 1.09,
+                "Total Cost WGST": 1464.96
+            }
+        ]
     }
 ]
