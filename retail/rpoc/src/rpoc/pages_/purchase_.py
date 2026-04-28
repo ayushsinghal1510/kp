@@ -2,11 +2,10 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from fpdf import FPDF
-from ..services import save_json
 
 # Assuming build_tmg_excel is defined elsewhere. 
 # Ensure you update its definition in rpoc.services to remove the 'include_profit' argument as well!
-from rpoc.services import build_tmg_excel , build_tmg_pdf
+from rpoc.services import build_tmg_excel , build_tmg_pdf , save_json
 
 
 if 'purchases' not in st.session_state or not st.session_state.purchases: 
