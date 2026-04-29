@@ -68,5 +68,30 @@
         ],
         "status": "completed",
         "timestamp": "2026-04-28T14:50:50.485210"
+    },
+    {
+        "filename": "manual",
+        "name": "tep1",
+        "supplier": "Manual",
+        "purchase_order_date": "2026-04-29",
+        "orders": [
+            {
+                "product_name": "3 Legs CW 24 x 320ml (Lime Flavor) -NL",
+                "quantity": 21.0,
+                "packing_size": 24.0
+            },
+            {
+                "product_name": "3 Legs CW 24 x 320ml (Guava Flavor) -NL",
+                "quantity": 25.0,
+                "packing_size": 24.0
+            },
+            {
+                "product_name": "3 Legs CW 200ml 8 x 6's x 200ml (NL)",
+                "quantity": 23.0,
+                "packing_size": 8.0
+            }
+        ],
+        "status": "completed",
+        "timestamp": "2026-04-29T07:30:17.318095"
     }
 ]

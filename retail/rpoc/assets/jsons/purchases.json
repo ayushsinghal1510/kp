@@ -85,16 +85,16 @@
         "products": [
             {
                 "Product Name": "3 Legs CW 24 x 320ml (Lime Flavor) -NL",
-                "Qty": 23.0,
+                "Qty": 44.0,
                 "Packing Size": 24.0,
-                "Total Ordered Qty": 552.0,
+                "Total Ordered Qty": 1056.0,
                 "Ctn Price WOGST": 24.0,
                 "Unit Price WOGST": 1.0,
-                "Total WOGST": 552.0,
-                "GST": 9.0,
-                "Ctn Price WGST": 26.16,
-                "Unit Cost WGST": 1.09,
-                "Total Cost WGST": 601.68
+                "Total WOGST": 1056.0,
+                "GST": 900.0,
+                "Ctn Price WGST": 240.0,
+                "Unit Cost WGST": 10.0,
+                "Total Cost WGST": 10560.0
             },
             {
                 "Product Name": "3 Legs CW 24 x 320ml (Lychee Flavor) -NL",
@@ -111,16 +111,29 @@
             },
             {
                 "Product Name": "3 Legs CW 24 x 320ml (Guava Flavor) -NL",
-                "Qty": 56.0,
+                "Qty": 81.0,
                 "Packing Size": 24.0,
-                "Total Ordered Qty": 1344.0,
+                "Total Ordered Qty": 1944.0,
                 "Ctn Price WOGST": 24.0,
                 "Unit Price WOGST": 1.0,
-                "Total WOGST": 1344.0,
+                "Total WOGST": 1944.0,
+                "GST": 900.0,
+                "Ctn Price WGST": 240.0,
+                "Unit Cost WGST": 10.0,
+                "Total Cost WGST": 19440.0
+            },
+            {
+                "Product Name": "3 Legs CW 200ml 8 x 6's x 200ml (NL)",
+                "Qty": 23.0,
+                "Packing Size": 8.0,
+                "Total Ordered Qty": 184.0,
+                "Ctn Price WOGST": 28.2,
+                "Unit Price WOGST": 3.525,
+                "Total WOGST": 648.6,
                 "GST": 9.0,
-                "Ctn Price WGST": 26.16,
-                "Unit Cost WGST": 1.09,
-                "Total Cost WGST": 1464.96
+                "Ctn Price WGST": 30.74,
+                "Unit Cost WGST": 3.8423,
+                "Total Cost WGST": 706.97
             }
         ]
     }
