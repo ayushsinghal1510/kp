@@ -24,6 +24,19 @@ def safe_str(
         errors = 'replace'
     ).decode('latin-1')
 
+def create_pdf(text: str) -> bytes:
+    
+    pdf: FPDF = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    
+    pdf.multi_cell(
+        0, 10,
+        txt=text.encode('latin-1', 'replace').decode('latin-1')
+    )
+    
+    return pdf.output(dest='S').encode('latin-1')
+
 def safe_num(
     val : Any , 
     default : float = 0.0
