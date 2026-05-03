@@ -1,54 +1,34 @@
 [
     {
-        "Supplier": "Unknown",
-        "date": "20 04 2026",
-        "po_number": "PO-00001",
-        "products": [
-            {
-                "Product Name": "100 PLUS 1.5L",
-                "Qty": 53.0,
-                "Packing Size": 12.0,
-                "Total Ordered Qty": 636.0,
-                "Ctn Price WOGST": 11.55,
-                "Unit Price WOGST": 0.9625,
-                "Total WOGST": 612.15,
-                "GST": 9.16,
-                "Ctn Price WGST": 12.61,
-                "Unit Cost WGST": 1.0507,
-                "Total Cost WGST": 668.22
-            }
-        ]
-    },
-    {
         "Supplier": "SHENG SHENG F&B INDUSTRIES PTE LTD",
         "date": "28 04 2026",
         "po_number": "PO-00002",
         "products": [
             {
                 "Product Name": "Cha Pai Grapefruit Jasmine Tea",
-                "Qty": 24.0,
+                "Qty": 28.02,
                 "Packing Size": 12.0,
-                "Total Ordered Qty": 288.0,
+                "Total Ordered Qty": 336.24,
                 "Ctn Price WOGST": 13.0,
                 "Unit Price WOGST": 1.0833,
-                "Total WOGST": 312.0,
-                "GST": 9.0,
-                "Ctn Price WGST": 14.17,
-                "Unit Cost WGST": 1.1808,
-                "Total Cost WGST": 340.08
+                "Total WOGST": 364.26,
+                "GST": 900.0,
+                "Ctn Price WGST": 130.0,
+                "Unit Cost WGST": 10.8333,
+                "Total Cost WGST": 3642.6
             },
             {
                 "Product Name": "Ice Cool Young Coconut with Pulp",
-                "Qty": 36.0,
+                "Qty": 42.0,
                 "Packing Size": 12.0,
-                "Total Ordered Qty": 432.0,
+                "Total Ordered Qty": 504.0,
                 "Ctn Price WOGST": 15.0,
                 "Unit Price WOGST": 1.25,
-                "Total WOGST": 540.0,
-                "GST": 9.0,
-                "Ctn Price WGST": 16.35,
-                "Unit Cost WGST": 1.3625,
-                "Total Cost WGST": 588.6
+                "Total WOGST": 630.0,
+                "GST": 900.0,
+                "Ctn Price WGST": 150.0,
+                "Unit Cost WGST": 12.5,
+                "Total Cost WGST": 6300.0
             },
             {
                 "Product Name": "Kangshifu Ice Black Tea Lemon Flavour",
@@ -75,6 +55,45 @@
                 "Ctn Price WGST": 8.9,
                 "Unit Cost WGST": 0.7418,
                 "Total Cost WGST": 124.62
+            },
+            {
+                "Product Name": "Kangshifu Pear Juice with Rock Sugar",
+                "Qty": 0.0,
+                "Packing Size": 12.0,
+                "Total Ordered Qty": 0.0,
+                "Ctn Price WOGST": 8.17,
+                "Unit Price WOGST": 0.6806,
+                "Total WOGST": 0.0,
+                "GST": 9.0,
+                "Ctn Price WGST": 8.9,
+                "Unit Cost WGST": 0.7418,
+                "Total Cost WGST": 0.0
+            },
+            {
+                "Product Name": "Ice Cool Bird\u2019s Nest Flavour Drink",
+                "Qty": 5.01,
+                "Packing Size": 12.0,
+                "Total Ordered Qty": 60.12,
+                "Ctn Price WOGST": 9.5,
+                "Unit Price WOGST": 0.7917,
+                "Total WOGST": 47.59,
+                "GST": 900.0,
+                "Ctn Price WGST": 95.0,
+                "Unit Cost WGST": 7.9167,
+                "Total Cost WGST": 475.95
+            },
+            {
+                "Product Name": "Ice Cool Rose Bandung Drink",
+                "Qty": 7.0,
+                "Packing Size": 12.0,
+                "Total Ordered Qty": 84.0,
+                "Ctn Price WOGST": 10.0,
+                "Unit Price WOGST": 0.8333,
+                "Total WOGST": 70.0,
+                "GST": 900.0,
+                "Ctn Price WGST": 100.0,
+                "Unit Cost WGST": 8.3333,
+                "Total Cost WGST": 700.0
             }
         ]
     },
@@ -85,6 +104,19 @@
         "products": [
             {
                 "Product Name": "3 Legs CW 24 x 320ml (Lime Flavor) -NL",
+                "Qty": 44.04,
+                "Packing Size": 24.0,
+                "Total Ordered Qty": 1056.96,
+                "Ctn Price WOGST": 24.0,
+                "Unit Price WOGST": 1.0,
+                "Total WOGST": 1056.96,
+                "GST": 900.0,
+                "Ctn Price WGST": 240.0,
+                "Unit Cost WGST": 10.0,
+                "Total Cost WGST": 10569.6
+            },
+            {
+                "Product Name": "3 Legs CW 24 x 320ml (Lychee Flavor) -NL",
                 "Qty": 44.0,
                 "Packing Size": 24.0,
                 "Total Ordered Qty": 1056.0,
@@ -97,43 +129,129 @@
                 "Total Cost WGST": 10560.0
             },
             {
-                "Product Name": "3 Legs CW 24 x 320ml (Lychee Flavor) -NL",
-                "Qty": 35.0,
-                "Packing Size": 24.0,
-                "Total Ordered Qty": 840.0,
-                "Ctn Price WOGST": 24.0,
-                "Unit Price WOGST": 1.0,
-                "Total WOGST": 840.0,
-                "GST": 9.0,
-                "Ctn Price WGST": 26.16,
-                "Unit Cost WGST": 1.09,
-                "Total Cost WGST": 915.6
-            },
-            {
                 "Product Name": "3 Legs CW 24 x 320ml (Guava Flavor) -NL",
-                "Qty": 81.0,
+                "Qty": 84.0,
                 "Packing Size": 24.0,
-                "Total Ordered Qty": 1944.0,
+                "Total Ordered Qty": 2016.0,
                 "Ctn Price WOGST": 24.0,
                 "Unit Price WOGST": 1.0,
-                "Total WOGST": 1944.0,
+                "Total WOGST": 2016.0,
                 "GST": 900.0,
                 "Ctn Price WGST": 240.0,
                 "Unit Cost WGST": 10.0,
-                "Total Cost WGST": 19440.0
+                "Total Cost WGST": 20160.0
             },
             {
                 "Product Name": "3 Legs CW 200ml 8 x 6's x 200ml (NL)",
-                "Qty": 23.0,
+                "Qty": 28.02,
                 "Packing Size": 8.0,
-                "Total Ordered Qty": 184.0,
+                "Total Ordered Qty": 224.16,
                 "Ctn Price WOGST": 28.2,
                 "Unit Price WOGST": 3.525,
-                "Total WOGST": 648.6,
+                "Total WOGST": 790.16,
+                "GST": 900.0,
+                "Ctn Price WGST": 282.0,
+                "Unit Cost WGST": 35.25,
+                "Total Cost WGST": 7901.64
+            }
+        ]
+    },
+    {
+        "Supplier": "POKKA PTE LTD",
+        "date": "30 04 2026",
+        "po_number": "PO-00006",
+        "products": [
+            {
+                "Product Name": "POKKA ICE PEACH TEA 1500ML",
+                "Qty": 0.02,
+                "Packing Size": 12.0,
+                "Total Ordered Qty": 0.24,
+                "Ctn Price WOGST": 17.6,
+                "Unit Price WOGST": 1.4667,
+                "Total WOGST": 0.35,
                 "GST": 9.0,
-                "Ctn Price WGST": 30.74,
-                "Unit Cost WGST": 3.8423,
-                "Total Cost WGST": 706.97
+                "Ctn Price WGST": 19.18,
+                "Unit Cost WGST": 1.5987,
+                "Total Cost WGST": 0.38
+            },
+            {
+                "Product Name": "POKKA JASMINE GREEN TEA (1500ML X 12BTL)",
+                "Qty": 0.03,
+                "Packing Size": 12.0,
+                "Total Ordered Qty": 0.36,
+                "Ctn Price WOGST": 17.6,
+                "Unit Price WOGST": 1.4667,
+                "Total WOGST": 0.53,
+                "GST": 9.0,
+                "Ctn Price WGST": 19.18,
+                "Unit Cost WGST": 1.5987,
+                "Total Cost WGST": 0.58
+            },
+            {
+                "Product Name": "POKKA ICE PEACH TEA 500ML",
+                "Qty": 1.0,
+                "Packing Size": 24.0,
+                "Total Ordered Qty": 24.0,
+                "Ctn Price WOGST": 17.12,
+                "Unit Price WOGST": 0.7133,
+                "Total WOGST": 17.12,
+                "GST": 9.0,
+                "Ctn Price WGST": 18.66,
+                "Unit Cost WGST": 0.7775,
+                "Total Cost WGST": 18.66
+            }
+        ]
+    },
+    {
+        "Supplier": "G LONG FOODSTUFF TRADING COMPANY PTE LTD",
+        "date": "30 04 2026",
+        "po_number": "PO-00007",
+        "products": [
+            {
+                "Product Name": "SAMYANG HOT CHICKEN CARBONARA BIG BOWL 105G X 16",
+                "Qty": 0.0,
+                "Packing Size": 16.0,
+                "Total Ordered Qty": 0.0,
+                "Ctn Price WOGST": 37.6,
+                "Unit Price WOGST": 2.35,
+                "Total WOGST": 0.0,
+                "GST": 9.0,
+                "Ctn Price WGST": 40.98,
+                "Unit Cost WGST": 2.5615,
+                "Total Cost WGST": 0.0
+            },
+            {
+                "Product Name": "SL SEASONEDSEAWEED(PERILLAOIL LAVER) 4GX8'SX12",
+                "Qty": 0.0,
+                "Packing Size": 12.0,
+                "Total Ordered Qty": 0.0,
+                "Ctn Price WOGST": 33.6,
+                "Unit Price WOGST": 2.8,
+                "Total WOGST": 0.0,
+                "GST": 9.0,
+                "Ctn Price WGST": 36.62,
+                "Unit Cost WGST": 3.052,
+                "Total Cost WGST": 0.0
+            }
+        ]
+    },
+    {
+        "Supplier": "SUN LIM GARDEN FOODSTUFFS PTE LTD",
+        "date": "01 05 2026",
+        "po_number": "PO-00014",
+        "products": [
+            {
+                "Product Name": "Green Peas (120g) 120gx10pkt-BAG",
+                "Qty": 1.0,
+                "Packing Size": 10.0,
+                "Total Ordered Qty": 10.0,
+                "Ctn Price WOGST": 10.0,
+                "Unit Price WOGST": 1.0,
+                "Total WOGST": 10.0,
+                "GST": 9.0,
+                "Ctn Price WGST": 10.9,
+                "Unit Cost WGST": 1.09,
+                "Total Cost WGST": 10.9
             }
         ]
     }
