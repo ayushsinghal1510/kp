@@ -16,6 +16,12 @@ Extract product pricing information from the attached file with absolute precisi
     - **Fallback:** If "TMG Promotion Price" is missing, duplicate the "TMG Selling Price". If BOTH are missing, use `null`.
 9. **BARCODE:** Extract the product barcode or unique item code if present (often a long numerical string or alphanumeric SKU). If not found, return an empty string.
 
+10. FULL EXTRACTION (CRITICAL): You must process EVERY SINGLE PAGE of the document. Do not stop extracting until you have reached the very end of the file. 
+11. DEDUPLICATION: If the exact same product appears multiple times in the document, extract it ONLY ONCE.
+
+12. STRICT CHARACTER ENCODING: You must use strictly standard ASCII characters. NEVER use typographic "smart" quotes or backticks. Always use the straight single quote (') instead of (’), and the straight double quote (") instead of (”). 
+Example: Write "10's" instead of "10’s".
+
 ### OUTPUT FORMAT (JSON ONLY):
 {
     "supplier": "string",

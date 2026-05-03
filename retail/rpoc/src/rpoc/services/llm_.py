@@ -1,18 +1,15 @@
 import base64
+import json
+import re
 from datetime import datetime
 from io import BytesIO
-import json 
+from typing import Any
+
 from groq import Groq
 import streamlit as st
 import polars as pl
 import docx2txt
 
-import json
-import polars as pl
-import docx2txt
-import streamlit as st
-from io import BytesIO
-from typing import Any
 
 def process_document_with_llm(
     uploaded_file : Any , 
@@ -22,14 +19,15 @@ def process_document_with_llm(
 
     file_bytes : bytes = uploaded_file.getvalue()
     mime_type : str = uploaded_file.type
+    content : list = []
 
     if 'spreadsheetml.sheet' in mime_type or 'ms-excel' in mime_type : 
         df : pl.DataFrame = pl.read_excel(BytesIO(file_bytes))
-        content : list = [f"{prompt}\n\nData:\n{df.write_csv()}"]
+        content = [f'{prompt}\n\nData:\n{df.write_csv()}']
 
     elif 'officedocument.wordprocessingml.document' in mime_type : 
         text : str = docx2txt.process(BytesIO(file_bytes))
-        content : list = [f"{prompt}\n\nDocument Text:\n{text}"]
+        content = [f'{prompt}\n\nDocument Text:\n{text}']
 
     elif mime_type in [
         'application/pdf' , 
@@ -37,7 +35,7 @@ def process_document_with_llm(
         'image/png' , 
         'image/webp'
     ] : 
-        content : list = [
+        content = [
             prompt , 
             {
                 'mime_type' : mime_type , 
@@ -46,22 +44,51 @@ def process_document_with_llm(
         ]
 
     elif 'text/plain' in mime_type : 
-        content : list = [f"{prompt}\n\n{file_bytes.decode('utf-8')}"]
+        content = [f'{prompt}\n\n{file_bytes.decode("utf-8")}']
 
     else : 
-        raise ValueError(f"Unsupported file type: {mime_type}")
+        raise ValueError(f'Unsupported file type : {mime_type}')
 
-    response : Any = model_client.generate_content(
-        content , 
-        generation_config = {'response_mime_type' : 'application/json'}
-    )
+    max_retries : int = 3
+    data : dict = {}
+    raw_response_text : str = ''
+
+    for attempt in range(max_retries) : 
+
+        try : 
+
+            response : Any = model_client.generate_content(
+                content , 
+                generation_config = {
+                    'response_mime_type' : 'application/json' , 
+                    'max_output_tokens' : 81920
+                }
+            )
+
+            raw_response_text = response.text
+            data = json.loads(raw_response_text)
+            
+            break 
+
+        except Exception as e : 
+
+            st.warning(f'JSON parsing failed on attempt {attempt + 1}/{max_retries} : {e}')
+            
+            with st.expander('View Raw LLM Output (Dev Mode)') : 
+                st.code(
+                    raw_response_text , 
+                    language = 'json'
+                )
+            
+            if attempt == max_retries - 1 : 
+                st.error('Max retries reached. Failed to parse valid JSON from LLM.')
+                return []
 
     processed_items : list[dict] = []
 
     try : 
 
-        data : dict = json.loads(response.text)
-        supplier : str = data.get(
+        raw_supplier : str = data.get(
             'supplier' , 
             'Unknown'
         )
@@ -70,29 +97,45 @@ def process_document_with_llm(
             []
         )
 
+        supplier : str = re.sub(
+            r'[^a-z0-9\(\)\[\] ]' , 
+            '' , 
+            raw_supplier.lower()
+        ).strip()
+
         deduplicated_products : dict = {}
 
         for prod in raw_products : 
-            prod_name : str = prod.get(
+            original_name : str = prod.get(
                 'Product Name' , 
                 'Unknown'
             )
+
+            sanitized_name : str = re.sub(
+                r'[^a-z0-9\(\)\[\] ]' , 
+                '' , 
+                original_name.lower()
+            ).strip()
+            
+            # THE FIX: Explicitly update the dictionary with the sanitized string
+            prod['Product Name'] = sanitized_name
+            
             prod_price : float = float(prod.get('Pack Price' , 0.0) or 0.0)
             
-            if prod_name in deduplicated_products : 
-                existing_price : float = float(deduplicated_products[prod_name].get('Pack Price' , 0.0) or 0.0)
+            if sanitized_name in deduplicated_products : 
+                existing_price : float = float(deduplicated_products[sanitized_name].get('Pack Price' , 0.0) or 0.0)
                 
                 if existing_price == 0.0 and prod_price > 0.0 : 
-                    deduplicated_products[prod_name]['Pack Price'] = prod_price
+                    deduplicated_products[sanitized_name]['Pack Price'] = prod_price
                     
-                existing_barcode : str = deduplicated_products[prod_name].get('Barcode' , '')
+                existing_barcode : str = deduplicated_products[sanitized_name].get('Barcode' , '')
                 new_barcode : str = prod.get('Barcode' , '')
                 
                 if not existing_barcode and new_barcode : 
-                    deduplicated_products[prod_name]['Barcode'] = new_barcode
+                    deduplicated_products[sanitized_name]['Barcode'] = new_barcode
                     
             else : 
-                deduplicated_products[prod_name] = prod
+                deduplicated_products[sanitized_name] = prod
 
         for product in deduplicated_products.values() : 
 
@@ -126,11 +169,11 @@ def process_document_with_llm(
                     'Supplier' : supplier , 
                     'TMG Selling Price' : product.pop(
                         'TMG Selling Price' , 
-                        0
+                        0.0
                     ) , 
                     'TMG Promotion Price' : product.pop(
                         'TMG Promotion Price' , 
-                        0
+                        0.0
                     ) , 
                     'Redundant' : json.dumps(
                         product.get(
@@ -143,22 +186,24 @@ def process_document_with_llm(
                 processed_items.append(product_dict)
 
             except Exception as e : 
-                st.error('')
+                st.error(f'Error processing product dictionary : {e}')
 
     except Exception as e : 
-        st.error(f"Failed to parse LLM response: {e}")
+        st.error(f'Failed to map parsed data : {e}')
 
     return processed_items
+
+
 def process_order_image(
-    uploaded_file , 
+    uploaded_file : Any , 
     client : Groq
 ) -> dict : 
 
     base64_image : str = base64.b64encode(uploaded_file.getvalue()).decode('utf-8')
 
-    prompt = 'Extract details from this Purchase Order into JSON format. Keys: supplier, purchase_order_date, orders (list of {product_name, quantity, packing_size}).'
+    prompt : str = 'Extract details from this Purchase Order into JSON format. Keys: supplier, purchase_order_date, orders (list of {product_name, quantity, packing_size}).'
 
-    completion = client.chat.completions.create(
+    completion : Any = client.chat.completions.create(
         model = 'meta-llama/llama-4-scout-17b-16e-instruct' , 
         messages = [
             {
@@ -180,11 +225,11 @@ def process_order_image(
         response_format = {'type' : 'json_object'}
     )
 
-    data = json.loads(completion.choices[0].message.content)
+    data : dict = json.loads(completion.choices[0].message.content)
 
     return {
         'filename' : uploaded_file.name , 
-        'name' : f'Order_{datetime.now().strftime('%H%M%S')}' , 
+        'name' : f'Order_{datetime.now().strftime("%H%M%S")}' , 
         'supplier' : data.get('supplier') , 
         'purchase_order_date' : data.get('purchase_order_date') , 
         'orders' : data.get('orders' , []) , 
