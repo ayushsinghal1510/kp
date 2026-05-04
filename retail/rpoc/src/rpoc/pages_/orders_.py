@@ -156,10 +156,14 @@ for index , order in visible :
                         cur_prod , 
                         st.session_state.df
                     )
-                    saved_pk : float = float(item.get('packing_size' , 0) or 0)
-                    pk_val : float = saved_pk if saved_pk != 0 else auto_pk
+                    
+                    raw_pk : Any = item.get('packing_size')
+                    saved_pk : float = float(raw_pk) if raw_pk is not None else 0.0
+                    pk_val : float = saved_pk if saved_pk != 0.0 else auto_pk
 
-                    saved_qty : int = int(item.get('quantity' , 1) or 1)
+                    # THE FIX: Explicitly handle None to preserve 0 values
+                    raw_qty : Any = item.get('quantity')
+                    saved_qty : int = int(raw_qty) if raw_qty is not None else 1
 
                     new_qty : int = ec2.number_input(
                         'Qty (CTN)' , 
@@ -239,7 +243,6 @@ for index , order in visible :
                     
                     st.success('Saved!')
                     st.rerun()
-
             edit_dialog(
                 order , 
                 index

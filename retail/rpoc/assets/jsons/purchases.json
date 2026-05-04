@@ -254,5 +254,90 @@
                 "Total Cost WGST": 10.9
             }
         ]
+    },
+    {
+        "Supplier": "biscotti trading pte ltd",
+        "date": "04 05 2026",
+        "po_number": "PO-00017",
+        "products": [
+            {
+                "Product Name": "cake cheese pound 150g",
+                "Qty": 2.0,
+                "Packing Size": 24.0,
+                "Total Ordered Qty": 48.0,
+                "Ctn Price WOGST": 18.3,
+                "Unit Price WOGST": 0.7625,
+                "Total WOGST": 36.6,
+                "GST": 0.0,
+                "Ctn Price WGST": 18.3,
+                "Unit Cost WGST": 0.7625,
+                "Total Cost WGST": 36.6
+            },
+            {
+                "Product Name": "cake fruit pound 150gm",
+                "Qty": 2.0,
+                "Packing Size": 24.0,
+                "Total Ordered Qty": 48.0,
+                "Ctn Price WOGST": 18.3,
+                "Unit Price WOGST": 0.7625,
+                "Total WOGST": 36.6,
+                "GST": 0.0,
+                "Ctn Price WGST": 18.3,
+                "Unit Cost WGST": 0.7625,
+                "Total Cost WGST": 36.6
+            },
+            {
+                "Product Name": "cake pandan pound 150g",
+                "Qty": 2.0,
+                "Packing Size": 24.0,
+                "Total Ordered Qty": 48.0,
+                "Ctn Price WOGST": 18.3,
+                "Unit Price WOGST": 0.7625,
+                "Total WOGST": 36.6,
+                "GST": 0.0,
+                "Ctn Price WGST": 18.3,
+                "Unit Cost WGST": 0.7625,
+                "Total Cost WGST": 36.6
+            },
+            {
+                "Product Name": "shoonfatt biscuit lavish cheese swich 190g",
+                "Qty": 6.0,
+                "Packing Size": 12.0,
+                "Total Ordered Qty": 72.0,
+                "Ctn Price WOGST": 13.4,
+                "Unit Price WOGST": 1.1167,
+                "Total WOGST": 80.4,
+                "GST": 0.0,
+                "Ctn Price WGST": 13.4,
+                "Unit Cost WGST": 1.1167,
+                "Total Cost WGST": 80.4
+            },
+            {
+                "Product Name": "cake chocolate pound 150g",
+                "Qty": 3.0,
+                "Packing Size": 24.0,
+                "Total Ordered Qty": 72.0,
+                "Ctn Price WOGST": 18.3,
+                "Unit Price WOGST": 0.7625,
+                "Total WOGST": 54.9,
+                "GST": 0.0,
+                "Ctn Price WGST": 18.3,
+                "Unit Cost WGST": 0.7625,
+                "Total Cost WGST": 54.9
+            },
+            {
+                "Product Name": "shoonfatt bis colada lighttreat ccsp 200g",
+                "Qty": 3.0,
+                "Packing Size": 12.0,
+                "Total Ordered Qty": 36.0,
+                "Ctn Price WOGST": 13.4,
+                "Unit Price WOGST": 1.1167,
+                "Total WOGST": 40.2,
+                "GST": 0.0,
+                "Ctn Price WGST": 13.4,
+                "Unit Cost WGST": 1.1167,
+                "Total Cost WGST": 40.2
+            }
+        ]
     }
 ]

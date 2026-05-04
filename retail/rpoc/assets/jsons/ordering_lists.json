@@ -313,5 +313,60 @@
         ],
         "status": "pending",
         "timestamp": "2026-05-02T04:54:48.190393"
+    },
+    {
+        "filename": "manual",
+        "name": "tep1",
+        "supplier": "Manual",
+        "purchase_order_date": "2026-05-04",
+        "orders": [
+            {
+                "product_name": "cake cheese pound 150g",
+                "quantity": 2,
+                "packing_size": 24.0
+            },
+            {
+                "product_name": "cake fruit pound 150gm",
+                "quantity": 2,
+                "packing_size": 24.0
+            },
+            {
+                "product_name": "cake pandan pound 150g",
+                "quantity": 2,
+                "packing_size": 24.0
+            },
+            {
+                "product_name": "shoonfatt biscuit lavish cheese swich 190g",
+                "quantity": 2,
+                "packing_size": 12.0
+            }
+        ],
+        "status": "completed",
+        "timestamp": "2026-05-04T20:38:03.240478"
+    },
+    {
+        "filename": "manual",
+        "name": "tep2",
+        "supplier": "Manual",
+        "purchase_order_date": "2026-05-04",
+        "orders": [
+            {
+                "product_name": "cake chocolate pound 150g",
+                "quantity": 3,
+                "packing_size": 24.0
+            },
+            {
+                "product_name": "shoonfatt bis colada lighttreat ccsp 200g",
+                "quantity": 3,
+                "packing_size": 12.0
+            },
+            {
+                "product_name": "shoonfatt biscuit lavish cheese swich 190g",
+                "quantity": 4,
+                "packing_size": 12.0
+            }
+        ],
+        "status": "completed",
+        "timestamp": "2026-05-04T20:49:22.757623"
     }
 ]

@@ -10,7 +10,6 @@ import streamlit as st
 import polars as pl
 import docx2txt
 
-
 def process_document_with_llm(
     uploaded_file : Any , 
     prompt : str , 
@@ -117,11 +116,21 @@ def process_document_with_llm(
                 original_name.lower()
             ).strip()
             
-            # THE FIX: Explicitly update the dictionary with the sanitized string
             prod['Product Name'] = sanitized_name
             
-            prod_price : float = float(prod.get('Pack Price' , 0.0) or 0.0)
+            raw_pack_price : float = float(prod.get('Pack Price' , 0.0) or 0.0)
+            purchased_qty : float = float(prod.get('Purchased Quantity' , 1.0) or 1.0)
+            free_qty : float = float(prod.get('Free Quantity' , 0.0) or 0.0)
             
+            if free_qty > 0.0 : 
+                total_cost : float = raw_pack_price * purchased_qty
+                total_qty : float = purchased_qty + free_qty
+                prod_price : float = total_cost / total_qty
+            else : 
+                prod_price : float = raw_pack_price
+            
+            prod['Pack Price'] = prod_price
+
             if sanitized_name in deduplicated_products : 
                 existing_price : float = float(deduplicated_products[sanitized_name].get('Pack Price' , 0.0) or 0.0)
                 
@@ -165,16 +174,11 @@ def process_document_with_llm(
                         'Pack Price Currency' , 
                         'SGD'
                     ) , 
-                    'GST' : 0.09 , 
+                    'GST' : product.pop(
+                        'GST' , 
+                        0.09
+                    ) , 
                     'Supplier' : supplier , 
-                    'TMG Selling Price' : product.pop(
-                        'TMG Selling Price' , 
-                        0.0
-                    ) , 
-                    'TMG Promotion Price' : product.pop(
-                        'TMG Promotion Price' , 
-                        0.0
-                    ) , 
                     'Redundant' : json.dumps(
                         product.get(
                             'Redundant' , 
@@ -193,7 +197,6 @@ def process_document_with_llm(
 
     return processed_items
 
-
 def process_order_image(
     uploaded_file : Any , 
     client : Groq
@@ -201,7 +204,9 @@ def process_order_image(
 
     base64_image : str = base64.b64encode(uploaded_file.getvalue()).decode('utf-8')
 
-    prompt : str = 'Extract details from this Purchase Order into JSON format. Keys: supplier, purchase_order_date, orders (list of {product_name, quantity, packing_size}).'
+    prompt : str = 'Extract details from this Purchase Order into JSON format. Keys: supplier , purchase_order_date , orders (list of {product_name , quantity , packing_size}).'
+    
+    time_str : str = datetime.now().strftime('%H%M%S')
 
     completion : Any = client.chat.completions.create(
         model = 'meta-llama/llama-4-scout-17b-16e-instruct' , 
@@ -222,17 +227,22 @@ def process_order_image(
                 ]
             }
         ] , 
-        response_format = {'type' : 'json_object'}
+        response_format = {
+            'type' : 'json_object'
+        }
     )
 
     data : dict = json.loads(completion.choices[0].message.content)
 
     return {
         'filename' : uploaded_file.name , 
-        'name' : f'Order_{datetime.now().strftime("%H%M%S")}' , 
+        'name' : f'Order_{time_str}' , 
         'supplier' : data.get('supplier') , 
         'purchase_order_date' : data.get('purchase_order_date') , 
-        'orders' : data.get('orders' , []) , 
+        'orders' : data.get(
+            'orders' , 
+            []
+        ) , 
         'status' : 'pending' , 
         'timestamp' : datetime.now().isoformat()
     }

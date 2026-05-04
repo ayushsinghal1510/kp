@@ -3,27 +3,215 @@ import time
 import streamlit as st
 import polars as pl
 import pandas as pd
+import numpy as np
 import re
+from typing import Any
 
 from rpoc.services import (
     process_document_with_llm , 
     get_display_df
 )
 
-def sanitize_text_col(df: pl.DataFrame, col: str) -> pl.DataFrame:
-    """Lowercase, strip non-alphanumeric (except brackets/parens/space)."""
+def sanitize_text_col(
+    df : pl.DataFrame , 
+    col : str
+) -> pl.DataFrame : 
     return df.with_columns(
         pl.col(col)
         .map_elements(
-            lambda x: re.sub(r'[^a-z0-9\(\)\[\] ]', '', x.lower()).strip()
-            if isinstance(x, str) else x,
-            return_dtype=pl.Utf8
+            lambda x : re.sub(
+                r'[^a-z0-9\(\)\[\] ]' , 
+                '' , 
+                x.lower()
+            ).strip() if isinstance(x , str) else x , 
+            return_dtype = pl.Utf8
         )
         .alias(col)
     )
 
+def safe_extract_price(
+    val : Any
+) -> float | None : 
+
+    if pd.isna(val) : 
+        return None
+
+    if isinstance(val , (int , float)) : 
+        return float(val)
+
+    val_str : str = str(val).strip()
+
+    price_match : re.Match | None = re.search(
+        r'\$\s*(\d+\.\d+|\d+)' , 
+        val_str
+    )
+
+    if price_match : 
+        return float(price_match.group(1))
+
+    try : 
+        return float(val_str)
+    except ValueError : 
+        return None
+
+def sanitize_dataframe_for_polars(
+    df : pd.DataFrame , 
+    root_cols : list[str]
+) -> pd.DataFrame : 
+
+    for col in root_cols : 
+        if col not in df.columns : 
+            df[col] = None
+
+    string_columns : list[str] = [
+        'Barcode' , 
+        'Product Name' , 
+        'Pack Price Currency' , 
+        'Supplier' , 
+        'Other' , 
+        'Filename' , 
+        'Redundant' , 
+        'Previous'
+    ]
+
+    numeric_columns : list[str] = [
+        'Packing Size' , 
+        'Previous Price' , 
+        'Pack Price' , 
+        'GST' , 
+        'TMG Selling Price' , 
+        'TMG Promotion Price'
+    ]
+
+    for col in string_columns : 
+        if col in df.columns : 
+            df[col] = df[col].astype(str).replace(
+                'nan' , 
+                None
+            )
+
+    for col in numeric_columns : 
+        if col in df.columns : 
+            df[col] = df[col].apply(safe_extract_price)
+
+    return df[root_cols]
+
+def normalize_string(
+    text : Any
+) -> str | None : 
+
+    if pd.isna(text) : 
+        return None
+
+    val_str : str = str(text)
+    
+    if val_str.lower() == 'nan' or not val_str.strip() : 
+        return None
+
+    normalized : str = re.sub(
+        r'[^a-z0-9\(\)\[\] ]' , 
+        '' , 
+        val_str.lower()
+    ).strip()
+
+    return normalized if normalized else None
+
+def process_uploaded_excel(
+    uploaded_file : Any
+) -> tuple[pd.DataFrame , str] : 
+
+    raw : pd.DataFrame = pd.read_excel(
+        uploaded_file , 
+        header = None
+    )
+    
+    try : 
+        supplier_cell : str = str(raw.iloc[2 , 1])
+        if supplier_cell == 'nan' : 
+            supplier_cell = str(raw.iloc[3 , 1])
+            
+        raw_supplier : str = supplier_cell.split(
+            ':' , 
+            1
+        )[1].strip() if ':' in supplier_cell else supplier_cell.strip()
+        
+        if not raw_supplier or raw_supplier.lower() == 'nan' : 
+            raw_supplier = 'unknown'
+            
+    except Exception : 
+        raw_supplier = 'unknown'
+
+    supplier : str = normalize_string(raw_supplier) or 'unknown'
+
+    price_data : pd.DataFrame = pd.read_excel(
+        uploaded_file , 
+        header = 5
+    )
+    
+    unnamed_cols : list[str] = [
+        c for c in price_data.columns 
+        if str(c).startswith('Unnamed:')
+    ]
+    
+    price_data.drop(
+        columns = unnamed_cols , 
+        inplace = True , 
+        errors = 'ignore'
+    )
+    
+    price_data.dropna(
+        how = 'all' , 
+        inplace = True
+    )
+
+    def safe_get(
+        df : pd.DataFrame , 
+        col : str
+    ) -> pd.Series | float : 
+        return df[col] if col in df.columns else np.nan
+
+    out : pd.DataFrame = pd.DataFrame()
+    
+    raw_product_names : pd.Series = safe_get(
+        price_data , 
+        'Product Name'
+    )
+    
+    out['Product Name'] = raw_product_names.apply(normalize_string)
+    
+    out['Packing Size'] = safe_get(
+        price_data , 
+        'Packing Size\n(PC)'
+    )
+    out['Pack Price'] = safe_get(
+        price_data , 
+        'Ctn Price\n(SGD)\n(W/O GST)'
+    )
+    out['TMG Selling Price'] = safe_get(
+        price_data , 
+        'TMG Selling Price'
+    )
+    out['TMG Promotion Price'] = safe_get(
+        price_data , 
+        'TMG\nPromotion\nPrice'
+    )
+    out['Supplier'] = supplier
+    
+    out['Pack Price Currency'] = 'SGD'
+
+    out.dropna(
+        subset = ['Product Name'] , 
+        inplace = True
+    )
+    out.reset_index(
+        drop = True , 
+        inplace = True
+    )
+    
+    return out , supplier
+
+
 # --- CONFIGURATION ---
-# These are the columns that physically exist in your CSV
 ROOT_CSV_COLUMNS : list[str] = [
     'Barcode' , 
     'Product Name' , 
@@ -41,233 +229,398 @@ ROOT_CSV_COLUMNS : list[str] = [
     'Previous'
 ]
 
+if 'pending_po_data' not in st.session_state : 
+    st.session_state.pending_po_data = []
+
 st.header(st.session_state.master_list_config['header'])
 
-uploaded_files : list | None = st.file_uploader(
-    **st.session_state.master_list_config['upload-file']
-)
+col_excel , col_po = st.columns(2)
 
-if st.button('Process & Import Files') and uploaded_files : 
+with col_excel : 
 
-    all_new_data : list[dict] = []
-
-    progress_text : str = 'Operation in progress. Please wait.'
-    my_bar : st.delta_generator.DeltaGenerator = st.progress(
-        0 , 
-        text = progress_text
-    )
+    st.subheader('Upload TMG Aggregated Price')
     
-    total_files : int = len(uploaded_files)
+    excel_files : list | None = st.file_uploader(
+        'Upload Excel Pricing (Direct DB)' , 
+        type = [
+            'xlsx' , 
+            'xls'
+        ] , 
+        accept_multiple_files = True , 
+        key = 'master_excel_upload'
+    )
 
-    for index , file in enumerate(uploaded_files) : 
+    if st.button('Process & Import Excel') and excel_files : 
+        
+        existing_df : pd.DataFrame = st.session_state.df.to_pandas()
 
-        try : 
-
-            file_path : str = os.path.join(
-                st.session_state.config['main']['path']['save'] , 
-                file.name
-            )
-
-            current_progress : int = int((index / total_files) * 80)
+        for file in excel_files : 
             
-            my_bar.progress(
-                current_progress , 
-                text = f'Processing {file.name} ({index + 1}/{total_files})'
-            )
+            try : 
+                
+                new_rows , supplier_name = process_uploaded_excel(file)
+                
+                if existing_df.empty : 
+                    
+                    if 'Pack Price' in new_rows.columns : 
+                        new_rows['Previous Price'] = new_rows['Pack Price']
+                        
+                    if 'TMG Promotion Price' in new_rows.columns : 
+                        new_rows['TMG Promotion Price'] = new_rows['TMG Promotion Price'].fillna(new_rows['TMG Selling Price'])
+                    else : 
+                        new_rows['TMG Promotion Price'] = new_rows['TMG Selling Price']
+                        
+                    existing_df = new_rows
+                    
+                else : 
+                    
+                    existing_df['_key'] = existing_df['Product Name'].str.lower().str.strip() + '|' + existing_df['Supplier'].fillna('').str.lower().str.strip()
+                    new_rows['_key'] = new_rows['Product Name'].str.lower().str.strip() + '|' + new_rows['Supplier'].fillna('').str.lower().str.strip()
 
-            with open(
-                file_path , 
-                'wb'
-            ) as file_obj : 
-                file_obj.write(file.getbuffer())
+                    for _ , nr in new_rows.iterrows() : 
+                        key : str = nr['_key']
+                        mask : pd.Series = existing_df['_key'] == key
 
-            data : list[dict] = process_document_with_llm(
+                        if mask.any() : 
+                            
+                            if 'Pack Price' in existing_df.columns : 
+                                old_price : float = existing_df.loc[mask , 'Pack Price'].values[0]
+                                existing_df.loc[mask , 'Previous Price'] = old_price
+                            
+                            update_cols : list[str] = [
+                                'Pack Price' , 
+                                'TMG Selling Price' , 
+                                'TMG Promotion Price' , 
+                                'Pack Price Currency'
+                            ]
+                            
+                            for col in update_cols : 
+                                if col in nr.index and not pd.isna(nr[col]) : 
+                                    existing_df.loc[mask , col] = nr[col]
+                                    
+                            current_promo : Any = existing_df.loc[mask , 'TMG Promotion Price'].values[0]
+                            current_selling : Any = existing_df.loc[mask , 'TMG Selling Price'].values[0]
+                            
+                            if pd.isna(current_promo) or current_promo == 0.0 or str(current_promo).lower() == 'nan' : 
+                                existing_df.loc[mask , 'TMG Promotion Price'] = current_selling
+                                
+                        else : 
+                            
+                            nr_dict : dict = nr.to_dict()
+                            
+                            if 'Pack Price' in nr_dict : 
+                                nr_dict['Previous Price'] = nr_dict['Pack Price']
+                                
+                            promo_val : Any = nr_dict.get('TMG Promotion Price' , np.nan)
+                            if pd.isna(promo_val) or promo_val == 0.0 or str(promo_val).lower() == 'nan' : 
+                                nr_dict['TMG Promotion Price'] = nr_dict.get('TMG Selling Price' , np.nan)
+                                
+                            existing_df = pd.concat(
+                                [
+                                    existing_df , 
+                                    pd.DataFrame([nr_dict])
+                                ] , 
+                                ignore_index = True
+                            )
+
+                    existing_df.drop(
+                        columns = ['_key'] , 
+                        inplace = True , 
+                        errors = 'ignore'
+                    )
+                    
+                st.success(f'Imported Excel: {file.name}')
+                
+            except Exception as e : 
+                st.error(f'Error on {file.name} : {e}')
+
+        existing_df = sanitize_dataframe_for_polars(
+            existing_df , 
+            ROOT_CSV_COLUMNS
+        )
+                
+        st.session_state.df = pl.from_pandas(existing_df)
+        st.session_state.df.write_csv(st.session_state.config['main']['path']['csv'])
+        st.rerun()
+
+with col_po : 
+
+    st.subheader('Upload Purchase Order')
+    
+    po_files : list | None = st.file_uploader(
+        'Upload Purchase Order (LLM)' , 
+        accept_multiple_files = True , 
+        key = 'po_upload'
+    )
+
+    if st.button('Extract PO with LLM') and po_files : 
+        
+        all_new_data : list[dict] = []
+        
+        for file in po_files : 
+            
+            extracted_data : list[dict] = process_document_with_llm(
                 file , 
                 st.session_state.prompts['ingestion'] , 
                 st.session_state.gemini_client
             )
-
-            for row in data : 
+            
+            for row in extracted_data : 
                 row['Filename'] = file.name
+                
+            all_new_data.extend(extracted_data)
+            
+        st.session_state.pending_po_data = all_new_data
 
-            all_new_data.extend(data)
+if st.session_state.pending_po_data : 
 
-        except Exception as e : 
-            st.error(f'Error processing {file.name} : {e}')
+    st.markdown('---')
+    st.subheader('Review & Approve PO Products')
+    
+    pending_df : pd.DataFrame = pd.DataFrame(st.session_state.pending_po_data)
+    
+    if 'Packing Size' not in pending_df.columns : 
+        pending_df['Packing Size'] = 1
 
-    if all_new_data : 
+    pending_df['Packing Size'] = pending_df['Packing Size'].replace(
+        0 , 
+        1
+    ).fillna(1)
+    
+    if 'Pack Price' not in pending_df.columns : 
+        pending_df['Pack Price'] = 0.0
 
-        my_bar.progress(
-            85 , 
-            text = 'Updating Master List'
-        )
+    pending_df.rename(
+        columns = {
+            'Packing Size' : 'Incoming Packing Size' , 
+            'Pack Price' : 'Incoming Packing Price'
+        } , 
+        inplace = True
+    )
+
+    master_df_pd : pd.DataFrame = st.session_state.df.to_pandas()
+    
+    if not master_df_pd.empty : 
         
-        new_data_df : pl.DataFrame = pl.DataFrame(all_new_data)
-
-        new_data_df = sanitize_text_col(new_data_df, 'Product Name')
-        new_data_df = sanitize_text_col(new_data_df, 'Supplier')
-
-        sales_cols : list[str] = [
-            'TMG Selling Price' , 
-            'TMG Promotion Price'
-        ]
+        master_subset : pd.DataFrame = master_df_pd[[
+            'Product Name' , 
+            'Supplier' , 
+            'Packing Size' , 
+            'Pack Price'
+        ]].copy()
         
-        for col in sales_cols : 
-            if col not in new_data_df.columns : 
-                new_data_df = new_data_df.with_columns(pl.lit(0.0).alias(col))
-            else : 
-                new_data_df = new_data_df.with_columns(
-                    pl.col(col).fill_null(0.0).cast(
-                        pl.Float64 , 
-                        strict = False
-                    )
-                )
-
-        new_data_df = new_data_df.with_columns(
-            pl.when(pl.col('TMG Promotion Price') == 0)
-            .then(pl.col('TMG Selling Price'))
-            .otherwise(pl.col('TMG Promotion Price')).alias('TMG Promotion Price')
+        master_subset.rename(
+            columns = {
+                'Packing Size' : 'Current Packing Size' , 
+                'Pack Price' : 'Current Packing Price'
+            } , 
+            inplace = True
         )
 
-        master_df : pl.DataFrame = st.session_state.df
-
-        for col_name , dtype in master_df.schema.items() : 
-            if col_name in new_data_df.columns : 
-                new_data_df = new_data_df.with_columns(
-                    pl.col(col_name).cast(
-                        dtype , 
-                        strict = False
-                    )
-                )
-
-        standard_update_cols : list[str] = [
-            c for c in st.session_state.config['main']['update-cols'] 
-            if c not in [
-                'Pack Price' , 
-                'Previous Price' , 
-                'Barcode'
-            ]
-        ]
-
-        updated_df : pl.DataFrame = master_df.join(
-            new_data_df , 
+        pending_df['Product Name'] = pending_df['Product Name'].apply(normalize_string)
+        pending_df['Supplier'] = pending_df['Supplier'].apply(normalize_string)
+        
+        master_subset['Product Name'] = master_subset['Product Name'].apply(normalize_string)
+        master_subset['Supplier'] = master_subset['Supplier'].apply(normalize_string)
+        
+        merged_df : pd.DataFrame = pending_df.merge(
+            master_subset , 
             on = [
                 'Product Name' , 
                 'Supplier'
             ] , 
-            how = 'left' , 
-            suffix = '_new'
-        ).with_columns(
-            [
-                pl.when(pl.col('Pack Price_new').is_not_null())
-                .then(pl.col('Pack Price'))
-                .otherwise(pl.col('Previous Price')).alias('Previous Price') , 
+            how = 'left'
+        )
 
-                pl.coalesce(
-                    pl.col('Pack Price_new') , 
-                    pl.col('Pack Price')
-                ).alias('Pack Price') , 
+    else : 
+        
+        merged_df : pd.DataFrame = pending_df.copy()
+        merged_df['Current Packing Size'] = np.nan
+        merged_df['Current Packing Price'] = np.nan
 
-                pl.coalesce(
-                    pl.col('Barcode_new') , 
-                    pl.col('Barcode')
-                ).alias('Barcode')
-            ] + [
+    merged_df['Current Packing Size'] = merged_df['Current Packing Size'].fillna(0)
+    merged_df['Current Packing Price'] = merged_df['Current Packing Price'].fillna(0.0)
+
+    merged_df['Incoming Unit Price'] = merged_df['Incoming Packing Price'] / merged_df['Incoming Packing Size']
+    
+    merged_df['Current Unit Price'] = np.where(
+        merged_df['Current Packing Size'] > 0 , 
+        merged_df['Current Packing Price'] / merged_df['Current Packing Size'] , 
+        0.0
+    )
+    
+    select_all : bool = st.checkbox('Select All Products')
+    
+    merged_df.insert(
+        0 , 
+        'Approve' , 
+        select_all
+    )
+    
+    display_cols : list[str] = [
+        'Approve' , 
+        'Product Name' , 
+        'Supplier' , 
+        'Current Packing Size' , 
+        'Incoming Packing Size' , 
+        'Current Packing Price' , 
+        'Incoming Packing Price' , 
+        'Current Unit Price' , 
+        'Incoming Unit Price'
+    ]
+    
+    for c in display_cols : 
+        if c not in merged_df.columns : 
+            merged_df[c] = None
+
+    edited_pending_df : pd.DataFrame = st.data_editor(
+        merged_df[display_cols] , 
+        use_container_width = True , 
+        num_rows = 'dynamic'
+    )
+    
+    if st.button('Confirm Approved Rows') : 
+        
+        approved_df : pd.DataFrame = edited_pending_df[edited_pending_df['Approve'] == True].copy()
+        
+        if not approved_df.empty : 
+            
+            approved_df.drop(
+                columns = [
+                    'Approve' , 
+                    'Current Packing Size' , 
+                    'Current Packing Price' , 
+                    'Current Unit Price' , 
+                    'Incoming Unit Price'
+                ] , 
+                inplace = True , 
+                errors = 'ignore'
+            )
+            
+            approved_df.rename(
+                columns = {
+                    'Incoming Packing Size' : 'Packing Size' , 
+                    'Incoming Packing Price' : 'Pack Price'
+                } , 
+                inplace = True
+            )
+            
+            master_pl_df : pl.DataFrame = st.session_state.df
+
+            approved_df = sanitize_dataframe_for_polars(
+                approved_df , 
+                ROOT_CSV_COLUMNS
+            )
+            
+            new_pl_df : pl.DataFrame = pl.from_pandas(approved_df)
+            
+            standard_cols : list[str] = [
+                c for c in ROOT_CSV_COLUMNS 
+                if c not in [
+                    'Previous Price' , 
+                    'TMG Promotion Price' , 
+                    'Pack Price Currency' , 
+                    'Product Name' , 
+                    'Supplier'
+                ]
+            ]
+            
+            coalesce_exprs : list[pl.Expr] = [
                 pl.coalesce(
                     pl.col(f'{c}_new') , 
                     pl.col(c)
                 ).alias(c)
-
-                for c in standard_update_cols
+                for c in standard_cols
             ]
-        ).select(master_df.columns)
+            
+            special_exprs : list[pl.Expr] = [
+                pl.when(pl.col('Pack Price_new').is_not_null())
+                .then(pl.col('Pack Price'))
+                .otherwise(pl.col('Previous Price')).alias('Previous Price') , 
+                
+                pl.when(
+                    pl.col('TMG Promotion Price_new').cast(
+                        pl.Float64 , 
+                        strict = False
+                    ).fill_null(0.0) == 0.0
+                )
+                .then(
+                    pl.coalesce(
+                        pl.col('TMG Selling Price_new') , 
+                        pl.col('TMG Selling Price')
+                    )
+                )
+                .otherwise(
+                    pl.coalesce(
+                        pl.col('TMG Promotion Price_new') , 
+                        pl.col('TMG Promotion Price')
+                    )
+                ).alias('TMG Promotion Price') , 
+                
+                pl.lit('SGD').alias('Pack Price Currency')
+            ]
+            
+            updated_df : pl.DataFrame = master_pl_df.join(
+                new_pl_df , 
+                on = [
+                    'Product Name' , 
+                    'Supplier'
+                ] , 
+                how = 'left' , 
+                suffix = '_new'
+            ).with_columns(
+                special_exprs + coalesce_exprs
+            ).select(ROOT_CSV_COLUMNS)
+            
+            new_rows : pl.DataFrame = new_pl_df.join(
+                master_pl_df , 
+                on = [
+                    'Product Name' , 
+                    'Supplier'
+                ] , 
+                how = 'anti'
+            ).with_columns(
+                [
+                    pl.col('Pack Price').alias('Previous Price') , 
+                    
+                    pl.when(
+                        pl.col('TMG Promotion Price').cast(
+                            pl.Float64 , 
+                            strict = False
+                        ).fill_null(0.0) == 0.0
+                    )
+                    .then(pl.col('TMG Selling Price'))
+                    .otherwise(pl.col('TMG Promotion Price')).alias('TMG Promotion Price') , 
+                    
+                    pl.lit('SGD').alias('Pack Price Currency')
+                ]
+            ).select(ROOT_CSV_COLUMNS)
+            
+            st.session_state.df = pl.concat(
+                [
+                    updated_df , 
+                    new_rows
+                ] , 
+                how = 'diagonal'
+            )
+            
+            st.session_state.df.write_csv(st.session_state.config['main']['path']['csv'])
+            
+            st.session_state.pending_po_data = []
+            
+            st.success('Master list updated successfully with approved products!')
+            time.sleep(1)
+            st.rerun()
 
-        new_rows : pl.DataFrame = new_data_df.join(
-            master_df ,  
-            on = [
-                'Product Name' , 
-                'Supplier'
-            ] , 
-            how = 'anti'
-        )
-
-        st.session_state.df = pl.concat(
-            [
-                updated_df , 
-                new_rows
-            ] , 
-            how = 'diagonal'
-        )
-
-        my_bar.progress(
-            95 , 
-            text = 'Saving to CSV...'
-        )
-        
-        st.session_state.df.write_csv(st.session_state.config['main']['path']['csv'])
-        
-        my_bar.progress(
-            100 , 
-            text = 'Process Complete!'
-        )
-        
-        time.sleep(1) 
-        my_bar.empty() 
-
-        st.success(f'Processed {len(uploaded_files)} files. Total rows : {len(st.session_state.df)}')
+        else : 
+            
+            st.warning('No valid rows were selected for approval.')
+st.markdown('---')
 
 if not st.session_state.df.is_empty() : 
     
     display_df : pl.DataFrame = get_display_df(st.session_state.df)
-
-    if 'TMG Selling Price' in display_df.columns and 'Pack Price' in display_df.columns : 
-        
-        display_df = display_df.with_columns(
-            [
-                pl.col('TMG Selling Price').fill_null(0.0).cast(pl.Float64).alias('__tmg_sell') , 
-                pl.col('TMG Promotion Price').fill_null(0.0).cast(pl.Float64).alias('__tmg_promo') , 
-                pl.col('Pack Price').fill_null(0.0).cast(pl.Float64).alias('__pack_price') , 
-                pl.col('Packing Size').fill_null(1.0).cast(pl.Float64).alias('__pack_size') , 
-                pl.col('GST').fill_null(0.0).cast(pl.Float64).alias('__gst') 
-            ]
-        )
-
-        display_df = display_df.with_columns(
-            pl.when(pl.col('__pack_size') == 0).then(1.0).otherwise(pl.col('__pack_size')).alias('__pack_size')
-        )
-        
-        display_df = display_df.with_columns(
-            ((pl.col('__pack_price') / pl.col('__pack_size')) * (1 + pl.col('__gst'))).alias('__unit_cost_wgst')
-        )
-
-        display_df = display_df.with_columns(
-            [
-                (pl.col('__tmg_sell') - pl.col('__unit_cost_wgst')).alias('Base Profit') , 
-                (pl.col('__tmg_promo') - pl.col('__unit_cost_wgst')).alias('Promotion Profit')
-            ]
-        )
-
-        display_df = display_df.with_columns(
-            [
-                pl.when(pl.col('__tmg_sell') > 0)
-                .then((pl.col('Base Profit') / pl.col('__tmg_sell')) * 100)
-                .otherwise(0.0).alias('Base Profit %') , 
-                  
-                pl.when(pl.col('__tmg_promo') > 0)
-                .then((pl.col('Promotion Profit') / pl.col('__tmg_promo')) * 100)
-                .otherwise(0.0).alias('Promotion Profit %')
-            ]
-        ).drop(
-            [
-                '__tmg_sell' , 
-                '__tmg_promo' , 
-                '__pack_price' , 
-                '__pack_size' , 
-                '__gst' , 
-                '__unit_cost_wgst'
-            ]
-        )
-
+    
     pandas_display_df : pd.DataFrame = display_df.to_pandas()
     pandas_display_df.index = pandas_display_df.index + 1
 
@@ -281,12 +634,10 @@ if not st.session_state.df.is_empty() :
             num_rows = 'dynamic'
         )
 
-    if st.button('Save Changes') : 
+        if st.button('Save Changes') : 
             
-            # Convert the edited dataframe back to Polars
             temp_pl_df : pl.DataFrame = pl.from_pandas(edited_df)
             
-            # 1. Map aliased columns back to their original root names
             rename_map : dict[str , str] = {
                 'Packing Price WOGST' : 'Pack Price' , 
                 'Packing Price Currency' : 'Pack Price Currency'
@@ -300,7 +651,6 @@ if not st.session_state.df.is_empty() :
                         }
                     )
             
-            # 2. Extract only the root columns present in the edited dataframe
             valid_edited_cols : list[str] = [
                 col for col in temp_pl_df.columns 
                 if col in ROOT_CSV_COLUMNS
@@ -308,7 +658,6 @@ if not st.session_state.df.is_empty() :
             
             temp_pl_df = temp_pl_df.select(valid_edited_cols)
             
-            # 3. Recover the dropped root columns (GST, Filename, etc.) from the original state
             original_df : pl.DataFrame = st.session_state.df
             
             missing_root_cols : list[str] = [
@@ -323,7 +672,6 @@ if not st.session_state.df.is_empty() :
                 ]
             )
             
-            # 4. Join back to maintain all original ROOT_CSV_COLUMNS
             final_save_df : pl.DataFrame = temp_pl_df.join(
                 recovery_df , 
                 on = [
@@ -333,7 +681,6 @@ if not st.session_state.df.is_empty() :
                 how = 'left'
             )
             
-            # Reorder columns to match ROOT_CSV_COLUMNS strictly
             final_ordered_cols : list[str] = [
                 col for col in ROOT_CSV_COLUMNS 
                 if col in final_save_df.columns
@@ -342,12 +689,12 @@ if not st.session_state.df.is_empty() :
             final_save_df = final_save_df.select(final_ordered_cols)
             
             st.session_state.df = final_save_df
-            st.session_state.df.write_csv(
-                st.session_state.config['main']['path']['csv']
-            )
+            st.session_state.df.write_csv(st.session_state.config['main']['path']['csv'])
             
             st.success('Master list updated successfully!')
+            time.sleep(1)
             st.rerun()
+
     else : 
 
         st.dataframe(

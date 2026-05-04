@@ -34,7 +34,9 @@ if prompt := st.chat_input("Ask the Data Agent...") :
     with st.chat_message("user") : 
         st.markdown(prompt)
 
-    product_names = st.session_state.df['Product Name'].to_list() if 'Product Name' in st.session_state.df.columns else []
+    raw_names = st.session_state.df['Product Name'].to_list() if 'Product Name' in st.session_state.df.columns else []
+    product_names = [p for p in raw_names if isinstance(p, str)]
+    
     close_matches = difflib.get_close_matches(
         prompt , 
         product_names , 
