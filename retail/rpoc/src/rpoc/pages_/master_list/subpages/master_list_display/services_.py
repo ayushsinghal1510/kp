@@ -6,6 +6,7 @@ from polars import (
     Utf8
 )
 
+
 def get_display_df(
     df : DataFrame , 
 ) -> DataFrame : 
@@ -17,12 +18,15 @@ def get_display_df(
     ]
     
     for col in sales_cols : 
+        
         if col not in df.columns : 
+            
             df = df.with_columns(
                 pl.lit(0.0).alias(col)
             )
 
     if 'Barcode' not in df.columns : 
+        
         df = df.with_columns(
             pl.lit('').alias('Barcode')
         )
@@ -59,7 +63,9 @@ def get_display_df(
     df = df.with_columns(
         pl.when(
             pl.col('Packing Size') == 0
-        ).then(1.0).otherwise(
+        ).then(
+            1.0
+        ).otherwise(
             pl.col('Packing Size')
         ).alias('Packing Size')
     )
@@ -93,7 +99,11 @@ def get_display_df(
                 (pl.col('Base Profit') / pl.col('Selling Price')) * 100
             ).when(
                 pl.col('CTN Price WGST') > 0
-            ).then(-100.0).otherwise(0.0).alias('Base Profit Percentage') , 
+            ).then(
+                -100.0
+            ).otherwise(
+                0.0
+            ).alias('Base Profit Percentage') , 
 
             pl.when(
                 pl.col('Promotion Price') > 0
@@ -101,9 +111,27 @@ def get_display_df(
                 (pl.col('Promotion Profit') / pl.col('Promotion Price')) * 100
             ).when(
                 pl.col('CTN Price WGST') > 0
-            ).then(-100.0).otherwise(0.0).alias('Promotion Profit Percentage') , 
+            ).then(
+                -100.0
+            ).otherwise(
+                0.0
+            ).alias('Promotion Profit Percentage') , 
         ]
     )
+    
+    rename_map : dict[str , str] = {
+        'Packing Price WOGST' : 'CTN Price (SGD) (W/O GST)' , 
+        'Packing Size' : 'Packing Size (PC)' , 
+        'CTN Price WOGST' : 'Unit Price (SGD) (W/O GST)' , 
+        'Packing Price WGST' : 'Packing Price (SGD) (W GST)' , 
+        'CTN Price WGST' : 'Unit Price (SGD) (W GST)' , 
+        'Selling Price' : 'TMG Selling Price' , 
+        'Promotion Price' : 'TMG Promotion Price' , 
+        'Base Profit' : 'UNIT PROFIT ($)' , 
+        'Base Profit Percentage' : 'Profit Margin - %'
+    }
+
+    df = df.rename(rename_map)
     
     return df.select(
         [
@@ -111,15 +139,15 @@ def get_display_df(
             'Product Name' , 
             'Supplier' , 
             'Previous Price' , 
-            'Packing Price WOGST' , 
-            'Packing Size' ,  
-            'CTN Price WOGST' , 
-            'Packing Price WGST' , 
-            'CTN Price WGST' , 
-            'Selling Price' , 
-            'Promotion Price' , 
-            'Base Profit' , 
-            'Base Profit Percentage' , 
+            'CTN Price (SGD) (W/O GST)' , 
+            'Packing Size (PC)' ,  
+            'Unit Price (SGD) (W/O GST)' , 
+            'Packing Price (SGD) (W GST)' , 
+            'Unit Price (SGD) (W GST)' , 
+            'TMG Selling Price' , 
+            'TMG Promotion Price' , 
+            'UNIT PROFIT ($)' , 
+            'Profit Margin - %' , 
             'Promotion Profit' , 
             'Promotion Profit Percentage'
         ]
