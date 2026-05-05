@@ -1,0 +1,397 @@
+import time
+
+import numpy as np
+import pandas as pd
+import polars as pl
+import streamlit as st
+
+from typing import Any
+
+from .services_ import process_document_with_llm
+from ..services_ import sanitize_dataframe_for_polars , normalize_string , save_uploaded_file
+
+
+def handle_po_upload_section(
+    col : Any
+) -> None : 
+
+    with col : 
+        
+        st.subheader('Upload Purchase Order')
+        
+        po_files : list[Any] | None = st.file_uploader(
+            'Upload Purchase Order (LLM)' , 
+            accept_multiple_files = True , 
+            key = 'po_upload'
+        )
+
+        if st.button('Extract PO with LLM') and po_files : 
+            
+            all_new_data : list[dict[str , Any]] = []
+            
+            for file in po_files : 
+                
+                save_uploaded_file(file)
+
+                extracted_data : list[dict[str , Any]] = process_document_with_llm(
+                    file , 
+                    st.session_state.prompts['ingestion'] , 
+                    st.session_state.gemini_client
+                )
+                
+                for row in extracted_data : 
+                    
+                    row['Filename'] = file.name
+                    
+                all_new_data.extend(extracted_data)
+                
+            st.session_state.pending_po_data = all_new_data
+
+
+def handle_po_approval_section() -> None : 
+
+    st.markdown('---')
+    st.subheader('Review & Approve PO Products')
+    
+    pending_df : pd.DataFrame = pd.DataFrame(
+        st.session_state.pending_po_data
+    )
+
+    if pending_df.empty : 
+        return
+    
+    # --- FIX: Extract and safely store the Filenames before any merges drop them ---
+    pending_filenames : pd.DataFrame = pending_df[[
+        'Product Name' , 
+        'Supplier' , 
+        'Filename'
+    ]].copy()
+
+    pending_filenames['Product Name'] = pending_filenames['Product Name'].apply(
+        normalize_string
+    )
+    
+    pending_filenames['Supplier'] = pending_filenames['Supplier'].apply(
+        normalize_string
+    )
+
+    pending_filenames.drop_duplicates(
+        subset = [
+            'Product Name' , 
+            'Supplier'
+        ] , 
+        inplace = True
+    )
+    # -----------------------------------------------------------------------------
+    
+    if 'Packing Size' not in pending_df.columns : 
+        pending_df['Packing Size'] = 1
+
+    pending_df['Packing Size'] = pending_df['Packing Size'].replace(
+        0 , 
+        1
+    ).fillna(1)
+    
+    if 'Pack Price' not in pending_df.columns : 
+        pending_df['Pack Price'] = 0.0
+
+    if 'Selling Price' not in pending_df.columns : 
+        pending_df['Selling Price'] = 0.0
+
+    pending_df.rename(
+        columns = {
+            'Packing Size' : 'Incoming Packing Size' , 
+            'Pack Price' : 'Incoming Packing Price' , 
+            'Selling Price' : 'Incoming Selling Price'
+        } , 
+        inplace = True
+    )
+
+    master_df_pd : pd.DataFrame = st.session_state.df.to_pandas()
+
+    if not master_df_pd.empty : 
+
+        master_subset : pd.DataFrame = master_df_pd[[
+            'Product Name' , 
+            'Supplier' , 
+            'Packing Size' , 
+            'Pack Price' , 
+            'Selling Price'
+        ]].copy()
+        
+        master_subset.rename(
+            columns = {
+                'Packing Size' : 'Current Packing Size' , 
+                'Pack Price' : 'Current Packing Price' , 
+                'Selling Price' : 'Current Selling Price'
+            } , 
+            inplace = True
+        )
+
+        pending_df['Product Name'] = pending_df['Product Name'].apply(
+            normalize_string
+        )
+        
+        pending_df['Supplier'] = pending_df['Supplier'].apply(
+            normalize_string
+        )
+        
+        master_subset['Product Name'] = master_subset['Product Name'].apply(
+            normalize_string
+        )
+        
+        master_subset['Supplier'] = master_subset['Supplier'].apply(
+            normalize_string
+        )
+        
+        merged_df : pd.DataFrame = pending_df.merge(
+            master_subset , 
+            on = [
+                'Product Name' , 
+                'Supplier'
+            ] , 
+            how = 'left'
+        )
+
+    else : 
+        
+        merged_df : pd.DataFrame = pending_df.copy()
+        merged_df['Current Packing Size'] = np.nan
+        merged_df['Current Packing Price'] = np.nan
+        merged_df['Current Selling Price'] = np.nan
+
+    merged_df['Current Packing Size'] = merged_df['Current Packing Size'].fillna(0)
+    merged_df['Current Packing Price'] = merged_df['Current Packing Price'].fillna(0.0)
+    merged_df['Current Selling Price'] = merged_df['Current Selling Price'].fillna(0.0)
+
+    merged_df['Incoming Selling Price'] = np.where(
+        merged_df['Incoming Selling Price'].fillna(0.0) == 0.0 , 
+        merged_df['Current Selling Price'] , 
+        merged_df['Incoming Selling Price']
+    )
+
+    merged_df['Incoming Unit Price'] = merged_df['Incoming Packing Price'] / merged_df['Incoming Packing Size']
+    
+    merged_df['Current Unit Price'] = np.where(
+        merged_df['Current Packing Size'] > 0 , 
+        merged_df['Current Packing Price'] / merged_df['Current Packing Size'] , 
+        0.0
+    )
+    
+    select_all : bool = st.checkbox('Select All Products')
+    
+    merged_df.insert(
+        0 , 
+        'Approve' , 
+        select_all
+    )
+    
+    display_cols : list[str] = [
+        'Approve' , 
+        'Product Name' , 
+        'Supplier' , 
+        'Current Packing Size' , 
+        'Incoming Packing Size' , 
+        'Current Packing Price' , 
+        'Incoming Packing Price' , 
+        'Current Unit Price' , 
+        'Incoming Unit Price' , 
+        'Current Selling Price' , 
+        'Incoming Selling Price'
+    ]
+    
+    for c in display_cols : 
+        
+        if c not in merged_df.columns : 
+            merged_df[c] = None
+
+    styled_merged_df : Any = merged_df[display_cols].style.map(
+        lambda _ : 'background-color:#6496fa26' , 
+        subset = [
+            'Current Packing Size' , 
+            'Incoming Packing Size'
+        ]
+    ).map(
+        lambda _ : 'background-color:#64c86426' , 
+        subset = [
+            'Current Packing Price' , 
+            'Incoming Packing Price'
+        ]
+    ).map(
+        lambda _ : 'background-color:#fa963226' , 
+        subset = [
+            'Current Unit Price' , 
+            'Incoming Unit Price'
+        ]
+    ).map(
+        lambda _ : 'background-color:#9664fa26' , 
+        subset = [
+            'Current Selling Price' , 
+            'Incoming Selling Price'
+        ]
+    )
+
+    edited_pending_df : pd.DataFrame = st.data_editor(
+        styled_merged_df , 
+        use_container_width = True , 
+        num_rows = 'dynamic' , 
+        key = 'po_approval_editor'
+    )
+    
+    if st.button('Confirm Approved Rows') : 
+        
+        approved_df : pd.DataFrame = edited_pending_df[edited_pending_df['Approve'] == True].copy()
+        
+        if not approved_df.empty : 
+            
+            approved_df.drop(
+                columns = [
+                    'Approve' , 
+                    'Current Packing Size' , 
+                    'Current Packing Price' , 
+                    'Current Unit Price' , 
+                    'Incoming Unit Price' , 
+                    'Current Selling Price'
+                ] , 
+                inplace = True , 
+                errors = 'ignore'
+            )
+            
+            approved_df.rename(
+                columns = {
+                    'Incoming Packing Size' : 'Packing Size' , 
+                    'Incoming Packing Price' : 'Pack Price' , 
+                    'Incoming Selling Price' : 'Selling Price'
+                } , 
+                inplace = True
+            )
+
+            # --- FIX: Merge the safely stored Filenames back into the approved rows ---
+            approved_df = approved_df.merge(
+                pending_filenames , 
+                on = [
+                    'Product Name' , 
+                    'Supplier'
+                ] , 
+                how = 'left'
+            )
+            # --------------------------------------------------------------------------
+            
+            master_pl_df : pl.DataFrame = st.session_state.df
+
+            new_pl_df : pl.DataFrame = pl.from_pandas(approved_df)
+            
+            new_pl_df = sanitize_dataframe_for_polars(
+                new_pl_df , 
+                st.session_state.root_csv_columns
+            )
+            
+            standard_cols : list[str] = [
+                c for c in st.session_state.root_csv_columns 
+                if c not in [
+                    'Previous Price' , 
+                    'Promotion Price' , 
+                    'Pack Price Currency' , 
+                    'Product Name' , 
+                    'Supplier'
+                ]
+            ]
+            
+            coalesce_exprs : list[pl.Expr] = [
+                pl.coalesce(
+                    pl.col(f'{c}_new') , 
+                    pl.col(c)
+                ).alias(c)
+                for c in standard_cols
+            ]
+            
+            special_exprs : list[pl.Expr] = [
+                pl.when(
+                    pl.col('Pack Price_new').is_not_null()
+                ).then(
+                    pl.col('Pack Price')
+                ).otherwise(
+                    pl.col('Previous Price')
+                ).alias('Previous Price') , 
+                
+                pl.when(
+                    pl.col('Promotion Price_new').cast(
+                        pl.Float64 , 
+                        strict = False
+                    ).fill_null(0.0) == 0.0
+                ).then(
+                    pl.coalesce(
+                        pl.col('Selling Price_new') , 
+                        pl.col('Selling Price')
+                    )
+                ).otherwise(
+                    pl.coalesce(
+                        pl.col('Promotion Price_new') , 
+                        pl.col('Promotion Price')
+                    )
+                ).alias('Promotion Price') , 
+                
+                pl.lit('SGD').alias('Pack Price Currency')
+            ]
+            
+            updated_df : pl.DataFrame = master_pl_df.join(
+                new_pl_df , 
+                on = [
+                    'Product Name' , 
+                    'Supplier'
+                ] , 
+                how = 'left' , 
+                suffix = '_new'
+            ).with_columns(
+                special_exprs + coalesce_exprs
+            ).select(st.session_state.root_csv_columns)
+            
+            new_rows : pl.DataFrame = new_pl_df.join(
+                master_pl_df , 
+                on = [
+                    'Product Name' , 
+                    'Supplier'
+                ] , 
+                how = 'anti'
+            ).with_columns(
+                [
+                    pl.col('Pack Price').alias('Previous Price') , 
+                    
+                    pl.when(
+                        pl.col('Promotion Price').cast(
+                            pl.Float64 , 
+                            strict = False
+                        ).fill_null(0.0) == 0.0
+                    ).then(
+                        pl.col('Selling Price')
+                    ).otherwise(
+                        pl.col('Promotion Price')
+                    ).alias('Promotion Price') , 
+                    
+                    pl.lit('SGD').alias('Pack Price Currency')
+                ]
+            ).select(st.session_state.root_csv_columns)
+            
+            st.session_state.df = pl.concat(
+                [
+                    updated_df , 
+                    new_rows
+                ] , 
+                how = 'diagonal'
+            )
+            
+            st.session_state.df.write_csv(
+                st.session_state.config['main']['path']['csv']
+            )
+            
+            st.session_state.pending_po_data = []
+            
+            st.success('Master list updated successfully with approved products!')
+            
+            time.sleep(1)
+            
+            st.rerun()
+
+        else : 
+            
+            st.warning('No valid rows were selected for approval.')

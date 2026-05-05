@@ -1,4 +1,5 @@
-import polars as pl 
+import polars as pl
+
 from polars import (
     DataFrame , 
     Float64 , 
@@ -6,12 +7,12 @@ from polars import (
 )
 
 def get_display_df(
-    df : DataFrame
+    df : DataFrame , 
 ) -> DataFrame : 
 
     sales_cols : list[str] = [
-        'TMG Selling Price' , 
-        'TMG Promotion Price' , 
+        'Selling Price' , 
+        'Promotion Price' , 
         'Previous Price'
     ]
     
@@ -44,15 +45,11 @@ def get_display_df(
                 Float64 , 
                 strict = False
             ).fill_null(1.0) , 
-            pl.col('GST').cast(
+            pl.col('Selling Price').cast(
                 Float64 , 
                 strict = False
             ).fill_null(0.0) , 
-            pl.col('TMG Selling Price').cast(
-                Float64 , 
-                strict = False
-            ).fill_null(0.0) , 
-            pl.col('TMG Promotion Price').cast(
+            pl.col('Promotion Price').cast(
                 Float64 , 
                 strict = False
             ).fill_null(0.0)
@@ -60,13 +57,19 @@ def get_display_df(
     )
 
     df = df.with_columns(
-        pl.when(pl.col('Packing Size') == 0).then(1.0).otherwise(pl.col('Packing Size')).alias('Packing Size')
+        pl.when(
+            pl.col('Packing Size') == 0
+        ).then(1.0).otherwise(
+            pl.col('Packing Size')
+        ).alias('Packing Size')
     )
+
+    gst_rate : float = 0.09
 
     df = df.with_columns(
         [
             (pl.col('Pack Price') / pl.col('Packing Size')).alias('CTN Price WOGST') , 
-            (pl.col('Pack Price') * (1 + pl.col('GST'))).alias('Packing Price WGST')
+            (pl.col('Pack Price') * (1.0 + gst_rate)).alias('Packing Price WGST')
         ]
     ).with_columns(
         [
@@ -77,34 +80,28 @@ def get_display_df(
 
     df = df.with_columns(
         [
-            (pl.col('TMG Selling Price') - pl.col('CTN Price WGST')).alias('Base Profit') , 
-            (pl.col('TMG Promotion Price') - pl.col('CTN Price WGST')).alias('Promotion Profit')
+            (pl.col('Selling Price') - pl.col('CTN Price WGST')).alias('Base Profit') , 
+            (pl.col('Promotion Price') - pl.col('CTN Price WGST')).alias('Promotion Profit')
         ]
     )
 
     df = df.with_columns(
         [
-            pl.when(pl.col('TMG Selling Price') > 0)
-            .then((pl.col('Base Profit') / pl.col('TMG Selling Price')) * 100)
-            .when(pl.col('CTN Price WGST') > 0)
-            .then(-100.0) 
-            .otherwise(0.0).alias('Base Profit Percentage') , 
-              
-            pl.when(pl.col('TMG Promotion Price') > 0)
-            .then((pl.col('Promotion Profit') / pl.col('TMG Promotion Price')) * 100)
-            .when(pl.col('CTN Price WGST') > 0)
-            .then(-100.0) 
-            .otherwise(0.0).alias('Promotion Profit Percentage') , 
+            pl.when(
+                pl.col('Selling Price') > 0
+            ).then(
+                (pl.col('Base Profit') / pl.col('Selling Price')) * 100
+            ).when(
+                pl.col('CTN Price WGST') > 0
+            ).then(-100.0).otherwise(0.0).alias('Base Profit Percentage') , 
 
-            pl.col('Pack Price Currency').alias('Packing Price Currency')
-        ]
-    ).with_columns(
-        [
-            pl.col('Packing Price Currency').alias('CTN Price Currency')
-        ]
-    ).with_columns(
-        [
-            (pl.col('GST') * 100).alias('GST Percentage')
+            pl.when(
+                pl.col('Promotion Price') > 0
+            ).then(
+                (pl.col('Promotion Profit') / pl.col('Promotion Price')) * 100
+            ).when(
+                pl.col('CTN Price WGST') > 0
+            ).then(-100.0).otherwise(0.0).alias('Promotion Profit Percentage') , 
         ]
     )
     
@@ -115,14 +112,12 @@ def get_display_df(
             'Supplier' , 
             'Previous Price' , 
             'Packing Price WOGST' , 
-            'Packing Price Currency' , 
             'Packing Size' ,  
             'CTN Price WOGST' , 
-            'CTN Price Currency' , 
             'Packing Price WGST' , 
             'CTN Price WGST' , 
-            'TMG Selling Price' , 
-            'TMG Promotion Price' , 
+            'Selling Price' , 
+            'Promotion Price' , 
             'Base Profit' , 
             'Base Profit Percentage' , 
             'Promotion Profit' , 

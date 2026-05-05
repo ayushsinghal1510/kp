@@ -1,5 +1,4 @@
 import os
-import yaml
 
 import streamlit as st
 
@@ -19,18 +18,18 @@ genai.configure(api_key = os.environ['GEMINI_API_KEY'])
 
 pages = {
     "Master List" : [
-        st.Page("pages_/master_list.py", title="Master List", icon="📋"),
+        st.Page("pages_/master_list/mlpage.py", title="Master List", icon="📋"),
     ],
     "Chatbot" : [
-        st.Page("pages_/chatbot_.py", title="Chatbot", icon="🧠"),
+        st.Page("pages_/chatbot/chpage.py", title="Chatbot", icon="🧠"),
     ],
     "Operations": [
 
-        st.Page("pages_/ordering_lists_.py", title="Ordering Lists", icon="📝"),
-        st.Page("pages_/orders_.py", title="Order Management", icon="📦"),
+        st.Page("pages_/ordering_lists/olpage.py", title="Ordering Lists", icon="📝"),
+        st.Page("pages_/orders/opage.py", title="Order Management", icon="📦"),
     ],
     "Finance": [
-        st.Page("pages_/purchase_.py", title="Financial Purchases", icon="🛒"),
+        st.Page("pages_/purchase/ppage.py", title="Financial Purchases", icon="🛒"),
     ]
 }
 

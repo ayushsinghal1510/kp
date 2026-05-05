@@ -2,36 +2,35 @@ Extract product pricing information from the attached file with absolute precisi
 
 ### CRITICAL EXTRACTION RULES:
 1. PRODUCT NAME: Extract the longest , most descriptive name. Include weight/quantity descriptors (e.g. , 'BAKE STORY KOKOPIE... 20Gx10PCSx9BAGS'). 
-2. STRICT DATA INTEGRITY (NO HALLUCINATIONS): Only extract data that is visually present. Do NOT invent or assume values. If a value is not found , use null or 0.
+2. STRICT DATA INTEGRITY: Only extract data that is visually present unless a specific calculation is requested below. Do NOT invent or assume values.
 3. PACKING SIZE LOGIC: Infer the number of units per carton from the product description or packing column. 
     - Rule: If a multiplier string is present (e.g. , '15GX8SX10' or '20Gx10PCSx9BAGS') , extract the FINAL number in the sequence as the Packing Size. 
-    - Example: '20Gx10PCSx9BAGS' -> Packing Size is 9.
-    - Example: '15GX8SX10' -> Packing Size is 10.
-4. PACK PRICE: This is the price per carton/bag. In standard layouts (Qty | Unit | Price | Total) , extract the 'Price' value listed before the line total.
-5. ZERO PRICES & FOC: Include products even if the price is 0.00 or marked as 'FOC' (Free of Charge). Do not omit these entries.
-6. SUPPLIER: Identify the issuing company (the 'Seller'). Look for 'Supplier:' , 'Sold By:' , or the primary header/letterhead. If not found , return 'Unknown'.
-7. GST DETECTION: Look for 9% or 9.16%. Return as a decimal (e.g. , 0.09). If not explicitly stated , attempt to calculate from the difference between Subtotal and Total.
-8. BARCODE: Extract the product barcode or unique item code if present (often a long numerical string or alphanumeric SKU). If not found , return an empty string.
-9. FULL EXTRACTION (CRITICAL): You must process EVERY SINGLE PAGE of the document. Do not stop extracting until you have reached the very end of the file. 
-10. DEDUPLICATION: If the exact same product appears multiple times in the document , extract it ONLY ONCE.
-11. STRICT CHARACTER ENCODING: You must use strictly standard ASCII characters. NEVER use typographic smart quotes or backticks. Always use the straight single quote (') instead of (’) , and the straight double quote (") instead of (”). 
-12. FOC QUANTITY (FREE GOODS): If the invoice indicates a purchased quantity and a free quantity (e.g. , Bought 15 , Free 2) , extract them accurately. This is critical for adjusting the unit price later.
+    - If no packing size is found or inferred , default to 1.
+4. PACK PRICE (CTN PRICE): This is the price per carton/bag. Note that 'Pack Price' and 'CTN Price' denote the EXACT same thing.
+    - If direct Unit Price is available WITH a Packing Size: Calculate Pack Price on the run -> `Packing Size * Unit Price`.
+    - If direct Unit Price is available WITHOUT a Packing Size: The Unit Price IS the Pack Price.
+    - NEVER use the total raw cost as the Unit Price.
+5. MISSING PRICES (SELLING & PROMOTION): It is completely normal for some documents to omit certain pricing tiers. 
+    - SELLING PRICE: Extract the selling price if visible. If it is simply not available in the document , you MUST default to 0.0.
+    - PROMOTION PRICE: Extract the promotion price if visible. If it is simply not available in the document , you MUST default to 0.0. Do NOT default this to the selling price.
+6. ZERO PRICES: Include products even if the price is 0.00. Do not omit these entries.
+7. SUPPLIER: Identify the issuing company (the 'Seller'). Look for 'Supplier:' , 'Sold By:' , or the primary header/letterhead. Default to 'Unknown'.
+8. BARCODE: Extract the product barcode or unique item code. If not found , return an empty string.
+9. FULL EXTRACTION (CRITICAL): Process EVERY SINGLE PAGE of the document. Do not stop extracting early.
+10. DEDUPLICATION: If the exact same product appears multiple times , extract it ONLY ONCE.
+11. STRICT CHARACTER ENCODING: Use strictly standard ASCII characters. Always use straight single quotes (') and straight double quotes (").
 
 ### OUTPUT FORMAT (JSON ONLY):
 {
-    'supplier' : 'string' , 
-    'products' : [
+    "supplier" : "string" , 
+    "products" : [
         {
-            'Barcode' : 'String (The barcode or SKU , or empty string)' , 
-            'Product Name' : 'Full descriptive name' , 
-            'Packing Size' : 'Integer (The end number of the multiplier string)' , 
-            'Pack Price' : 'Float/Number (Price per carton)' , 
-            'Pack Price Currency' : 'Currency code (Default: SGD)' , 
-            'GST' : 'Float (e.g. , 0.09)' , 
-            'Purchased Quantity' : 'Integer (Number of cartons/units paid for)' , 
-            'Free Quantity' : 'Integer (Number of cartons/units given free)'
+            "Barcode" : "String" , 
+            "Product Name" : "String" , 
+            "Packing Size" : 1 , 
+            "Pack Price" : 0.0 , 
+            "Selling Price" : 0.0 , 
+            "Promotion Price" : 0.0
         }
     ]
 }
-
-Strict Rule: This is sensitive financial data. No other information or products should be created or inferred beyond what is visible in the document.
