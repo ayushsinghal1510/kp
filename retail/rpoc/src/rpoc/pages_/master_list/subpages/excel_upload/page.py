@@ -44,22 +44,25 @@ def handle_excel_upload_section(
 
         for file in excel_files : 
 
-            save_uploaded_file(file)
+            save_uploaded_file(
+                file
+            )
 
             try : 
 
-                new_rows : pl.DataFrame = process_excel_with_llm(
+                new_rows : pl.DataFrame
+                exchange_rate : float
+                
+                new_rows , exchange_rate = process_excel_with_llm(
                     file
                 )
 
                 if new_rows.is_empty() : 
                     continue
 
-                # --- FIX: Inject the Filename column explicitly ---
                 new_rows = new_rows.with_columns(
                     pl.lit(file.name).alias('Filename')
                 )
-                # --------------------------------------------------
 
                 new_norm_exprs : list[pl.Expr] = [
                     pl.col(c).map_elements(
@@ -111,8 +114,19 @@ def handle_excel_upload_section(
 
                 if existing_df.is_empty() : 
 
+                    # Deduplicate the very first upload just in case
+                    new_rows = new_rows.unique(
+                        subset = [
+                            'Product Name' , 
+                            'Supplier'
+                        ] , 
+                        keep = 'last'
+                    )
+
                     existing_df = new_rows
-                    st.success(f'Imported Excel : {file.name}')
+                    
+                    st.success(f'Imported Excel : {file.name} with exchange rate : {exchange_rate}')
+                    st.info(f'Added {new_rows.height} new rows.')
 
                     continue
 
@@ -136,6 +150,13 @@ def handle_excel_upload_section(
                     key_expr.alias('_key')
                 )
 
+                # --- FIX: Deduplicate incoming LLM data to prevent Cartesian joins ---
+                new_rows = new_rows.unique(
+                    subset = ['_key'] , 
+                    keep = 'last'
+                )
+                # ----------------------------------------------------------------------
+
                 existing_keys : pl.DataFrame = existing_df.select('_key')
 
                 updates : pl.DataFrame = new_rows.join(
@@ -156,7 +177,7 @@ def handle_excel_upload_section(
                         existing_df = existing_df.with_columns(
                             pl.when(
                                 pl.col('_key').is_in(
-                                    updates.select('_key')
+                                    updates.get_column('_key')
                                 )
                             ).then(
                                 pl.col('Pack Price')
@@ -171,6 +192,7 @@ def handle_excel_upload_section(
                         how = 'left' , 
                         suffix = '_new'
                     )
+                    
                     update_cols : list[str] = [
                         'Pack Price' , 
                         'Selling Price' , 
@@ -211,7 +233,20 @@ def handle_excel_upload_section(
 
                 existing_df = existing_df.drop('_key')
 
-                st.success(f'Imported Excel : {file.name}')
+                inserted_count : int = inserts.height
+                updated_count : int = updates.height
+
+                st.success(f'Imported Excel : {file.name} with exchange rate : {exchange_rate}')
+                st.info(f'Added {inserted_count} new rows.')
+
+                if updated_count > 0 : 
+                    
+                    with st.expander(f'View {updated_count} Overridden / Duplicate Rows') : 
+                        
+                        st.dataframe(
+                            updates.drop('_key').to_pandas() , 
+                            use_container_width = True
+                        )
 
             except Exception as e : 
                 st.error(f'Error on {file.name} : {e}')

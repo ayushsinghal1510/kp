@@ -1,8 +1,10 @@
+import re
 import json
 import pandas as pd
 import polars as pl
 import streamlit as st
 
+from re import Match
 from typing import Any
 from pandas import DataFrame
 
@@ -34,13 +36,41 @@ def extract_exchange_rate(
 
     try : 
 
-        if raw_df.shape[0] > 1 and raw_df.shape[1] > 16 : 
+        if raw_df.shape[0] > 1 : 
             
-            cell : Any = raw_df.iloc[1 , 16]
-            
-            if pd.notna(cell) and str(cell).strip() : 
+            for col_idx in range(raw_df.shape[1]) : 
                 
-                return float(cell)
+                cell_val : Any = raw_df.iloc[1 , col_idx]
+                
+                if pd.isna(cell_val) : 
+                    continue
+                    
+                cell_str : str = str(cell_val).strip().lower()
+                
+                if 'rate' in cell_str : 
+                    
+                    match : Match | None = re.search(
+                        r'rate.*?(\d+\.\d+|\d+)' , 
+                        cell_str
+                    )
+                    
+                    if match : 
+                        
+                        try : 
+                            return float(match.group(1))
+                        except ValueError : 
+                            pass
+                            
+                    if col_idx + 1 < raw_df.shape[1] : 
+                        
+                        next_cell : Any = raw_df.iloc[1 , col_idx + 1]
+                        
+                        if pd.notna(next_cell) : 
+                            
+                            try : 
+                                return float(str(next_cell).strip())
+                            except ValueError : 
+                                pass
 
     except Exception : 
         pass
@@ -50,7 +80,7 @@ def extract_exchange_rate(
 
 def process_excel_with_llm(
     uploaded_file : Any , 
-) -> pl.DataFrame : 
+) -> tuple[pl.DataFrame , float] : 
 
     raw_sheets : dict[str , pd.DataFrame] = pd.read_excel(
         uploaded_file , 
@@ -65,6 +95,8 @@ def process_excel_with_llm(
     )
 
     all_extracted_items : list[dict[str , Any]] = []
+    
+    exchange_rate : float = 1.0
 
     for sheet_name , raw_df in raw_sheets.items() : 
 
@@ -72,7 +104,7 @@ def process_excel_with_llm(
             raw_df
         )
         
-        exchange_rate : float = extract_exchange_rate(
+        exchange_rate = extract_exchange_rate(
             raw_df
         )
 
@@ -111,29 +143,26 @@ def process_excel_with_llm(
             Respond ONLY with a valid JSON object containing a single key "items" mapped to the array of dictionaries.
         '''
 
-        response : Any = st.session_state.groq_client.chat.completions.create(
-            model = 'llama-3.3-70b-versatile' , 
-            messages = [
-                {
-                    'role' : 'system' , 
-                    'content' : system_instruction
-                } , 
-                {
-                    'role' : 'user' , 
-                    'content' : f'Extract from this CSV:\n{csv_string}'
-                }
-            ] , 
-            response_format = {
-                'type' : 'json_object'
-            } , 
-            temperature = 0.0
-        )
-
-        response_content : str = response.choices[0].message.content
+        content : list[str] = [
+            system_instruction , 
+            f'Extract from this CSV:\n{csv_string}'
+        ]
 
         try : 
+            
+            response : Any = st.session_state.gemini_client.generate_content(
+                content , 
+                generation_config = {
+                    'response_mime_type' : 'application/json' , 
+                    'max_output_tokens' : 81920
+                }
+            )
 
-            parsed_output : dict[str , Any] = json.loads(response_content)
+            response_content : str = response.text
+
+            parsed_output : dict[str , Any] = json.loads(
+                response_content
+            )
             
             items : list[dict[str , Any]] = parsed_output.get(
                 'items' , 
@@ -158,9 +187,9 @@ def process_excel_with_llm(
             st.error(f'Error parsing LLM response for sheet {sheet_name} : {error}')
 
     if all_extracted_items : 
-        return pl.DataFrame(all_extracted_items)
+        return pl.DataFrame(all_extracted_items) , exchange_rate
 
-    return pl.DataFrame()
+    return pl.DataFrame() , exchange_rate
 
 
 def _get_promo_price_expr() -> pl.Expr : 

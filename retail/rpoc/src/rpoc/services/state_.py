@@ -6,9 +6,10 @@ import streamlit as st
 
 from groq import Groq
 
-import google.generativeai as genai
-
 from .services_ import load_json
+
+from google import genai
+
 
 
 def load_session_state() : 
@@ -17,7 +18,9 @@ def load_session_state() :
         st.session_state.groq_client = Groq(api_key = os.environ['GROQ_API_KEY'])
 
     if 'gemini_client' not in st.session_state : 
-        st.session_state.gemini_client = genai.GenerativeModel('gemini-3.1-flash-lite-preview')
+        st.session_state.gemini_client = genai.Client(
+        api_key=os.environ.get("GEMINI_API_KEY"),
+    )
 
     if 'config' not in st.session_state : 
 

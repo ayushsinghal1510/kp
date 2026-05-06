@@ -15,14 +15,19 @@ Extract product pricing information from the attached file with absolute precisi
     - PROMOTION PRICE: Extract the promotion price if visible. If it is simply not available in the document , you MUST default to 0.0. Do NOT default this to the selling price.
 6. ZERO PRICES: Include products even if the price is 0.00. Do not omit these entries.
 7. SUPPLIER: Identify the issuing company (the 'Seller'). Look for 'Supplier:' , 'Sold By:' , or the primary header/letterhead. Default to 'Unknown'.
-8. BARCODE: Extract the product barcode or unique item code. If not found , return an empty string.
-9. FULL EXTRACTION (CRITICAL): Process EVERY SINGLE PAGE of the document. Do not stop extracting early.
-10. DEDUPLICATION: If the exact same product appears multiple times , extract it ONLY ONCE.
-11. STRICT CHARACTER ENCODING: Use strictly standard ASCII characters. Always use straight single quotes (') and straight double quotes (").
+8. EXCHANGE RATE (CRITICAL): 
+    - If the document has an explicit exchange rate showing how much 1 SGD is in the foreign currency , use it.
+    - If the document uses a foreign currency (e.g. , USD , RM/MYR) but lacks a rate , perform a live Google Search to find the current real-time exchange rate of 1 SGD to that specific foreign currency (e.g. , "1 SGD to MYR").
+    - If the document is in SGD or the currency is unstated , default to 1.0.
+9. BARCODE: Extract the product barcode or unique item code. If not found , return an empty string.
+10. FULL EXTRACTION (CRITICAL): Process EVERY SINGLE PAGE of the document. Do not stop extracting early.
+11. DEDUPLICATION: If the exact same product appears multiple times , extract it ONLY ONCE.
+12. STRICT CHARACTER ENCODING: Use strictly standard ASCII characters. Always use straight single quotes (') and straight double quotes (").
 
 ### OUTPUT FORMAT (JSON ONLY):
 {
     "supplier" : "string" , 
+    "exchange_rate" : 1.0 , 
     "products" : [
         {
             "Barcode" : "String" , 

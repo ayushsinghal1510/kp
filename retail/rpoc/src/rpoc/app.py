@@ -1,4 +1,3 @@
-import os
 
 import streamlit as st
 
@@ -6,15 +5,10 @@ from dotenv import load_dotenv
 
 from rpoc.services import load_session_state
 
-
-import google.generativeai as genai
-
 load_dotenv()
 load_session_state()
 
 st.set_page_config(layout="wide")
-
-genai.configure(api_key = os.environ['GEMINI_API_KEY'])
 
 pages = {
     "Master List" : [
