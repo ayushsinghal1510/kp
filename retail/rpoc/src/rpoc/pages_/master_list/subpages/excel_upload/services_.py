@@ -78,6 +78,16 @@ def extract_exchange_rate(
     return 1.0
 
 
+import re
+import json
+import pandas as pd
+import polars as pl
+import streamlit as st
+
+from typing import Any
+from pandas import DataFrame
+from google.genai import types
+
 def process_excel_with_llm(
     uploaded_file : Any , 
 ) -> tuple[pl.DataFrame , float] : 
@@ -140,28 +150,46 @@ def process_excel_with_llm(
             - "Selling Price" : float (if not present, default to 0.0)
             - "Promotion Price" : float (if not present, default to 0.0)
 
-            Respond ONLY with a valid JSON object containing a single key "items" mapped to the array of dictionaries.
+            Respond ONLY with a valid JSON object containing a single key "items" mapped to the array of dictionaries. Do not include markdown formatting or explanations.
         '''
 
-        content : list[str] = [
-            system_instruction , 
-            f'Extract from this CSV:\n{csv_string}'
+        formatted_contents : list[Any] = [
+            types.Content(
+                role = 'user' , 
+                parts = [
+                    types.Part.from_text(
+                        text = system_instruction
+                    ) , 
+                    types.Part.from_text(
+                        text = f'Extract from this CSV:\n{csv_string}'
+                    )
+                ]
+            )
         ]
 
         try : 
             
-            response : Any = st.session_state.gemini_client.generate_content(
-                content , 
-                generation_config = {
-                    'response_mime_type' : 'application/json' , 
-                    'max_output_tokens' : 81920
-                }
+            generation_config : Any = types.GenerateContentConfig(
+                max_output_tokens = 81920
             )
 
-            response_content : str = response.text
+            response : Any = st.session_state.gemini_client.models.generate_content(
+                model = 'gemini-2.5-flash' , 
+                contents = formatted_contents , 
+                config = generation_config
+            )
+
+            raw_response_text : str = response.text
+
+            cleaned_text : str = re.sub(
+                r'^```json\s*|```\s*$' , 
+                '' , 
+                raw_response_text.strip() , 
+                flags = re.MULTILINE | re.IGNORECASE
+            )
 
             parsed_output : dict[str , Any] = json.loads(
-                response_content
+                cleaned_text
             )
             
             items : list[dict[str , Any]] = parsed_output.get(
@@ -184,13 +212,13 @@ def process_excel_with_llm(
                 all_extracted_items.append(item)
 
         except Exception as error : 
+            
             st.error(f'Error parsing LLM response for sheet {sheet_name} : {error}')
 
     if all_extracted_items : 
         return pl.DataFrame(all_extracted_items) , exchange_rate
 
     return pl.DataFrame() , exchange_rate
-
 
 def _get_promo_price_expr() -> pl.Expr : 
 
