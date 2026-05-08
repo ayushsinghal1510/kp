@@ -170,7 +170,6 @@ def process_excel_with_llm(
         try : 
             
             generation_config : Any = types.GenerateContentConfig(
-                max_output_tokens = 81920
             )
 
             response : Any = st.session_state.gemini_client.models.generate_content(

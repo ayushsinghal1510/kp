@@ -169,7 +169,6 @@ def _call_llm_with_retries(
             ]
 
             generation_config : Any = types.GenerateContentConfig(
-                max_output_tokens = 81920 , 
                 tools = tools
             )
 
