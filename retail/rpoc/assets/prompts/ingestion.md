@@ -3,9 +3,21 @@ Extract product pricing information from the attached file with absolute precisi
 ### CRITICAL EXTRACTION RULES:
 1. PRODUCT NAME: Extract the longest , most descriptive name. Include weight/quantity descriptors (e.g. , 'BAKE STORY KOKOPIE... 20Gx10PCSx9BAGS'). 
 2. STRICT DATA INTEGRITY: Only extract data that is visually present unless a specific calculation is requested below. Do NOT invent or assume values.
-3. PACKING SIZE LOGIC: Infer the number of units per carton from the product description or packing column. 
-    - Rule: If a multiplier string is present (e.g. , '15GX8SX10' or '20Gx10PCSx9BAGS') , extract the FINAL number in the sequence as the Packing Size. 
-    - If no packing size is found or inferred , default to 1.
+
+1. PACKING SIZE EXTRACTION:
+   - Do NOT multiply numbers together to get the packing size. Extract the explicit integer value representing the carton/pack multiplier.
+   - The packing size can sometimes be at the start of the product name or number series. However, a starting number is ONLY the packing size if there is NO alphabetical character (like 's', 'g', 'ml') immediately following it.
+   - Use the following strict examples to determine the packing size:
+     * "24 x 45g" -> Packing Size: 24 (starts with 24, no alpha character after it)
+     * "24 x 45g x 34" -> Packing Size: 34
+     * "24s x 45g" -> Packing Size: 1 (starts with 24 but has an alpha 's', so it is treated as a single unit pack)
+     * "45g x 34" -> Packing Size: 34
+     * "45g x 34s" -> Packing Size: 34
+
+2. PACK PRICE (CARTON PRICE) CALCULATION:
+   - If the document explicitly provides a Pack Price or Carton Price, extract it directly.
+   - IF NO Pack Price / Carton Price is stated, you MUST calculate it on the fly using the Unit Price and the extracted Packing Size.
+   - Formula: Pack Price = Unit Price * Packing Size
 4. PACK PRICE (CTN PRICE): This is the price per carton/bag. Note that 'Pack Price' and 'CTN Price' denote the EXACT same thing.
     - If direct Unit Price is available WITH a Packing Size: Calculate Pack Price on the run -> `Packing Size * Unit Price`.
     - If direct Unit Price is available WITHOUT a Packing Size: The Unit Price IS the Pack Price.

@@ -228,43 +228,60 @@ def _process_and_deduplicate_products(
         []
     )
 
-    supplier : str = re.sub(
-        r'[^a-z0-9\(\)\[\] ]' , 
-        '' , 
-        raw_supplier.lower()
+    # --- FIX: Preserve case (A-Z) for display, but strip special chars ---
+    supplier_display : str = re.sub(
+        r'\s+' , 
+        ' ' , 
+        re.sub(
+            r'[^a-zA-Z0-9\(\)\[\] ]' , 
+            '' , 
+            raw_supplier
+        )
     ).strip()
+    
+    supplier_search_key : str = supplier_display.lower()
+    # ---------------------------------------------------------------------
 
     deduplicated_products : dict[str , dict[str , Any]] = {}
 
     for prod in raw_products : 
 
-        original_name : str = prod.get(
-            'Product Name' , 
-            'Unknown'
-        )
+        raw_product_name : str | None = prod.get('Product Name')
+        raw_product_description : str | None = prod.get('Product Description')
 
-        sanitized_name : str = re.sub(
-            r'[^a-z0-9\(\)\[\] ]' , 
-            '' , 
-            original_name.lower()
+        original_name : str = raw_product_name or raw_product_description or 'Unknown'
+
+        # --- FIX: Preserve case (A-Z) for display ---
+        sanitized_name_display : str = re.sub(
+            r'\s+' , 
+            ' ' , 
+            re.sub(
+                r'[^a-zA-Z0-9\(\)\[\] ]' , 
+                '' , 
+                original_name
+            )
         ).strip()
+        
+        sanitized_search_key : str = sanitized_name_display.lower()
+        # --------------------------------------------
 
-        prod['Product Name'] = sanitized_name
+        prod['Product Name'] = sanitized_name_display
 
         raw_pack_price : float = float(prod.get('Pack Price' , 0.0) or 0.0)
 
         prod['Pack Price'] = raw_pack_price
 
-        if sanitized_name in deduplicated_products : 
+        # --- FIX: Use the lowercase search key for the dictionary logic ---
+        if sanitized_search_key in deduplicated_products : 
 
             existing_price : float = float(
-                deduplicated_products[sanitized_name].get('Pack Price' , 0.0) or 0.0
+                deduplicated_products[sanitized_search_key].get('Pack Price' , 0.0) or 0.0
             )
 
             if existing_price == 0.0 and raw_pack_price > 0.0 : 
-                deduplicated_products[sanitized_name]['Pack Price'] = raw_pack_price
+                deduplicated_products[sanitized_search_key]['Pack Price'] = raw_pack_price
 
-            existing_barcode : str = deduplicated_products[sanitized_name].get(
+            existing_barcode : str = deduplicated_products[sanitized_search_key].get(
                 'Barcode' , 
                 ''
             )
@@ -275,10 +292,11 @@ def _process_and_deduplicate_products(
             )
 
             if not existing_barcode and new_barcode : 
-                deduplicated_products[sanitized_name]['Barcode'] = new_barcode
+                deduplicated_products[sanitized_search_key]['Barcode'] = new_barcode
 
         else : 
-            deduplicated_products[sanitized_name] = prod
+            deduplicated_products[sanitized_search_key] = prod
+        # ------------------------------------------------------------------
 
     for product in deduplicated_products.values() : 
 
@@ -299,7 +317,7 @@ def _process_and_deduplicate_products(
                 'Pack Price' : pack_price_val , 
                 'Selling Price' : selling_price_val , 
                 'Promotion Price' : promotion_price_val , 
-                'Supplier' : supplier , 
+                'Supplier' : supplier_display , # Use the cased display name
                 'Redundant' : json.dumps(
                     product.get('Redundant' , [])
                 )
@@ -307,13 +325,12 @@ def _process_and_deduplicate_products(
 
             processed_items.append(product_dict)
 
-
         except Exception as inner_e : 
             st.error(f'Error processing product dictionary : {inner_e}')
 
-    st.write(f'Products added with exachange rate : {exchange_rate}')
+    st.write(f'Products added with exchange rate : {exchange_rate}')
+    
     return processed_items
-
 
 def process_document_with_llm(
     uploaded_file : Any , 
@@ -323,19 +340,9 @@ def process_document_with_llm(
 
     try : 
 
-        rate_instructions : str = '''
-        CRITICAL EXCHANGE RATE RULES:
-        1. If the document has an explicit exchange rate to SGD, use it.
-        2. If the document uses a foreign currency (e.g., USD, RM) but lacks a rate, perform a live Google Search to find the current real-time exchange rate to SGD.
-        3. If the document is in SGD or the currency is unstated, default to 1.0.
-        4. You MUST output this rate as a root-level float key "exchange_rate" alongside "supplier" and "products" in your JSON.
-        '''
-
-        enhanced_prompt : str = f'{prompt}\n\n{rate_instructions}'
-
         content : list[Any] = _extract_content_from_file(
             uploaded_file , 
-            enhanced_prompt
+            prompt
         )
 
         parsed_data : dict[str , Any] = _call_llm_with_retries(

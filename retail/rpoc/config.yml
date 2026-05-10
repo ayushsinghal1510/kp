@@ -1,6 +1,6 @@
 main :
   path : 
-    csv : assets/data/data2.csv
+    csv : assets/data/data3.csv
     ordering-lists : assets/jsons/ordering_lists.json
     purchases : assets/jsons/purchases.json
     checkpoint : 

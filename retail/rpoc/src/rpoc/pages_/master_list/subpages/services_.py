@@ -54,7 +54,9 @@ def sanitize_dataframe_for_polars(
         'Other' , 
         'Filename' , 
         'Redundant' , 
-        'Previous'
+        'Previous' , 
+        'Match Product Name' , 
+        'Match Supplier'
     ]
 
     numeric_columns : list[str] = [
