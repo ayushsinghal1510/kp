@@ -1,5 +1,5 @@
 import time
-
+import numpy as np
 import pandas as pd
 import polars as pl
 import streamlit as st 
@@ -41,13 +41,43 @@ def handle_master_list_display() -> None :
                 file_name = 'master_list_export.csv' , 
                 mime = 'text/csv'
             )
-
+        
         if edit_mode : 
             
+            if 'master_list_editor' in st.session_state and st.session_state.master_list_editor.get('edited_rows') : 
+                
+                changes : dict[Any, Any] = st.session_state.master_list_editor['edited_rows']
+                
+                for row_idx_str , row_changes in changes.items() : 
+                    
+                    row_idx : int = int(row_idx_str) 
+                    
+                    for col_name , new_val in row_changes.items() : 
+                        
+                        col_idx : int = pandas_display_df.columns.get_loc(col_name)
+                        pandas_display_df.iloc[row_idx , col_idx] = new_val
+                
+                pandas_display_df['UNIT PROFIT ($)'] = pandas_display_df['TMG Selling Price'] - pandas_display_df['Unit Price (SGD) (W GST)']
+                
+                pandas_display_df['Profit Margin - %'] = np.where(
+                    pandas_display_df['TMG Selling Price'] > 0 , 
+                    (pandas_display_df['UNIT PROFIT ($)'] / pandas_display_df['TMG Selling Price']) * 100 , 
+                    -100.0
+                )
+
+                pandas_display_df['Promotion Profit'] = pandas_display_df['TMG Promotion Price'] - pandas_display_df['Unit Price (SGD) (W GST)']
+                
+                pandas_display_df['Promotion Profit Percentage'] = np.where(
+                    pandas_display_df['TMG Promotion Price'] > 0 , 
+                    (pandas_display_df['Promotion Profit'] / pandas_display_df['TMG Promotion Price']) * 100 , 
+                    -100.0
+                )
+
             edited_df : pd.DataFrame = st.data_editor(
                 pandas_display_df , 
                 use_container_width = True , 
-                num_rows = 'dynamic'
+                num_rows = 'dynamic' ,
+                key = 'master_list_editor'
             )
 
             if st.button('Save Changes') : 
@@ -56,7 +86,10 @@ def handle_master_list_display() -> None :
                 
                 rename_map : dict[str , str] = {
                     'Packing Price WOGST' : 'Pack Price' , 
-                    'Packing Price Currency' : 'Pack Price Currency'
+                    'Packing Price Currency' : 'Pack Price Currency' ,
+                    'TMG Selling Price' : 'Selling Price' ,
+                    'TMG Promotion Price' : 'Promotion Price' ,
+                    'Packing Size (PC)' : 'Packing Size'
                 }
                 
                 for old_name , new_name in rename_map.items() : 
@@ -77,6 +110,17 @@ def handle_master_list_display() -> None :
                 temp_pl_df = temp_pl_df.select(valid_edited_cols)
                 
                 original_df : pl.DataFrame = st.session_state.df
+
+                for col_name , col_type in original_df.schema.items() : 
+                    
+                    if col_name in temp_pl_df.columns : 
+                        
+                        temp_pl_df = temp_pl_df.with_columns(
+                            pl.col(col_name).cast(
+                                col_type , 
+                                strict = False
+                            )
+                        )
                 
                 missing_root_cols : list[str] = [
                     col for col in st.session_state.root_csv_columns 
