@@ -35,12 +35,12 @@ def handle_master_list_display() -> None :
                 index = False
             ).encode('utf-8')
             
-            st.download_button(
-                label = '🖨️ Download / Print Master List' , 
-                data = csv_export_data , 
-                file_name = 'master_list_export.csv' , 
-                mime = 'text/csv'
-            )
+            # st.download_button(
+            #     label = '🖨️ Download / Print Master List' , 
+            #     data = csv_export_data , 
+            #     file_name = 'master_list_export.csv' , 
+            #     mime = 'text/csv'
+            # )
         
         if edit_mode : 
             

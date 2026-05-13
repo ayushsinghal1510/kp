@@ -13,6 +13,16 @@ Extract product pricing information from the attached file with absolute precisi
      * "24s x 45g" -> Packing Size: 1 (starts with 24 but has an alpha 's', so it is treated as a single unit pack)
      * "45g x 34" -> Packing Size: 34
      * "45g x 34s" -> Packing Size: 34
+     * "24 x (12 x 20s)" -> Packing Size : 24
+     * "55GMX5PX6B" -> Packing Size : 5
+     * "55GMX5TX6B" -> Packing Size : 1
+     * "24S" -> Packing Size : 1
+     * "18GX8SX10 FP(FY18) SG" -> Packing size : 10
+     * "85g x24 (SG)" -> packing size : 24
+     * "64g*6+2*8" : Packing size : 6
+     * "120g*6*8" : Packing size : 48
+
+    If character is mentioned after the number, there is a good chance it is not the packing size, but if the charac is P or p or S or s or pcs or PKTS or pkts or packets, than it is indeed packing size
 
 2. PACK PRICE (CARTON PRICE) CALCULATION:
    - If the document explicitly provides a Pack Price or Carton Price, extract it directly.
