@@ -61,7 +61,8 @@ def handle_excel_upload_section(
                     continue
 
                 new_rows = new_rows.with_columns(
-                    pl.lit(file.name).alias('Filename')
+                    pl.lit(file.name).alias('Filename'),
+                    pl.lit(0.0).alias('Discount')
                 )
 
                 new_norm_exprs : list[pl.Expr] = [
@@ -81,6 +82,7 @@ def handle_excel_upload_section(
                 numeric_cols_to_cast : list[str] = [
                     'Packing Size' , 
                     'Pack Price' , 
+                    'Discount' ,
                     'Selling Price' , 
                     'Promotion Price' , 
                     'Previous Price'

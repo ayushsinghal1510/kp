@@ -78,7 +78,6 @@ def handle_po_approval_section() -> None :
     
     pending_df['Original Order'] = range(len(pending_df))
 
-    # --- FIX: Removed normalize_string from the display columns to prevent accidental lowercasing ---
     pending_df['Product Name'] = pending_df['Product Name'].astype(str).str.replace(
         r'\s+' , 
         ' ' , 
@@ -90,10 +89,7 @@ def handle_po_approval_section() -> None :
         ' ' , 
         regex = True
     ).str.strip()
-    # -----------------------------------------------------------------------------------------------
     
-    # 2. Create STRICT lowercase matching columns for searching/merging
-    # We apply normalize_string HERE so the matching logic is still robust, but the display stays cased.
     pending_df['Match Product Name'] = pending_df['Product Name'].apply(
         normalize_string
     ).str.lower()
@@ -110,7 +106,6 @@ def handle_po_approval_section() -> None :
             errors = 'coerce'
         ).fillna(0.0)
 
-    # Sort and Drop Duplicates using the MATCH columns
     pending_df.sort_values(
         by = ['Match Product Name' , 'Match Supplier' , 'Pack Price'] , 
         ascending = [True , True , False] , 
@@ -134,7 +129,6 @@ def handle_po_approval_section() -> None :
         inplace = True
     )
 
-    # Store filenames using Match columns so we can join them back reliably
     pending_filenames : pd.DataFrame = pending_df[[
         'Match Product Name' , 
         'Match Supplier' , 
@@ -184,7 +178,6 @@ def handle_po_approval_section() -> None :
             inplace = True
         )
         
-        # Prepare Master match columns (lower case)
         master_subset['Match Product Name'] = master_subset['Product Name'].apply(
             normalize_string
         ).str.replace(r'\s+', ' ', regex=True).str.strip().str.lower()
@@ -193,7 +186,6 @@ def handle_po_approval_section() -> None :
             normalize_string
         ).str.replace(r'\s+', ' ', regex=True).str.strip().str.lower()
         
-        # Drop original master string columns so they don't overwrite the pending_df casing
         master_subset.drop(columns=['Product Name', 'Supplier'], inplace=True)
         
         merged_df : pd.DataFrame = pending_df.merge(
@@ -319,10 +311,10 @@ def handle_po_approval_section() -> None :
                 inplace = True
             )
 
-            # Re-generate the Match columns for the approved rows so we can safely merge filenames back
-            # Use normalize_string here as well to match the previous generation
             approved_df['Match Product Name'] = approved_df['Product Name'].apply(normalize_string).str.lower()
             approved_df['Match Supplier'] = approved_df['Supplier'].apply(normalize_string).str.lower()
+            
+            approved_df['Discount'] = 0.0
 
             approved_df = approved_df.merge(
                 pending_filenames , 
@@ -353,9 +345,6 @@ def handle_po_approval_section() -> None :
                         )
                     )
 
-            # --- FIX: Ensure Polars merge matches the exact casing logic ---
-            # Instead of just lowercasing, if your master dataframe might have non-normalized data,
-            # we should rely on the pandas processing step we already did, but this works if master is clean.
             master_pl_df = master_pl_df.with_columns([
                 pl.col('Product Name').str.to_lowercase().alias('Match Product Name'),
                 pl.col('Supplier').str.to_lowercase().alias('Match Supplier')
@@ -365,7 +354,6 @@ def handle_po_approval_section() -> None :
                 pl.col('Product Name').str.to_lowercase().alias('Match Product Name'),
                 pl.col('Supplier').str.to_lowercase().alias('Match Supplier')
             ])
-            # ---------------------------------------------------------------
             
             standard_cols : list[str] = [
                 c for c in st.session_state.root_csv_columns 
@@ -376,7 +364,8 @@ def handle_po_approval_section() -> None :
                     'Product Name' , 
                     'Supplier' , 
                     'Match Product Name' , 
-                    'Match Supplier'
+                    'Match Supplier' ,
+                    'Discount'
                 ]
             ]
             
@@ -414,10 +403,11 @@ def handle_po_approval_section() -> None :
                     )
                 ).alias('Promotion Price') , 
                 
-                pl.lit('SGD').alias('Pack Price Currency')
+                pl.lit('SGD').alias('Pack Price Currency') ,
+                
+                pl.col('Discount').fill_null(0.0).alias('Discount')
             ]
             
-            # Join on Match Columns instead of exact strings
             updated_df : pl.DataFrame = master_pl_df.join(
                 new_pl_df , 
                 on = [
@@ -430,7 +420,6 @@ def handle_po_approval_section() -> None :
                 special_exprs + coalesce_exprs
             ).select(st.session_state.root_csv_columns)
             
-            # Use anti join on match columns
             new_rows : pl.DataFrame = new_pl_df.join(
                 master_pl_df , 
                 on = [

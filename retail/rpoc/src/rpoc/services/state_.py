@@ -69,6 +69,7 @@ def load_session_state() :
         'Product Name' , 
         'Packing Size' , 
         'Previous Price' , 
+        'Discount' , 
         'Pack Price' , 
         'Supplier' , 
         'Selling Price' , 

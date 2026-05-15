@@ -1,5 +1,4 @@
 import time
-import numpy as np
 import pandas as pd
 import polars as pl
 import streamlit as st 
@@ -35,43 +34,14 @@ def handle_master_list_display() -> None :
                 index = False
             ).encode('utf-8')
             
-            # st.download_button(
-            #     label = '🖨️ Download / Print Master List' , 
-            #     data = csv_export_data , 
-            #     file_name = 'master_list_export.csv' , 
-            #     mime = 'text/csv'
-            # )
+            st.download_button(
+                label = '🖨️ Download / Print Master List' , 
+                data = csv_export_data , 
+                file_name = 'master_list_export.csv' , 
+                mime = 'text/csv'
+            )
         
         if edit_mode : 
-            
-            if 'master_list_editor' in st.session_state and st.session_state.master_list_editor.get('edited_rows') : 
-                
-                changes : dict[Any, Any] = st.session_state.master_list_editor['edited_rows']
-                
-                for row_idx_str , row_changes in changes.items() : 
-                    
-                    row_idx : int = int(row_idx_str) 
-                    
-                    for col_name , new_val in row_changes.items() : 
-                        
-                        col_idx : int = pandas_display_df.columns.get_loc(col_name)
-                        pandas_display_df.iloc[row_idx , col_idx] = new_val
-                
-                pandas_display_df['UNIT PROFIT ($)'] = pandas_display_df['TMG Selling Price'] - pandas_display_df['Unit Price (SGD) (W GST)']
-                
-                pandas_display_df['Profit Margin - %'] = np.where(
-                    pandas_display_df['TMG Selling Price'] > 0 , 
-                    (pandas_display_df['UNIT PROFIT ($)'] / pandas_display_df['TMG Selling Price']) * 100 , 
-                    -100.0
-                )
-
-                pandas_display_df['Promotion Profit'] = pandas_display_df['TMG Promotion Price'] - pandas_display_df['Unit Price (SGD) (W GST)']
-                
-                pandas_display_df['Promotion Profit Percentage'] = np.where(
-                    pandas_display_df['TMG Promotion Price'] > 0 , 
-                    (pandas_display_df['Promotion Profit'] / pandas_display_df['TMG Promotion Price']) * 100 , 
-                    -100.0
-                )
 
             edited_df : pd.DataFrame = st.data_editor(
                 pandas_display_df , 
@@ -80,16 +50,19 @@ def handle_master_list_display() -> None :
                 key = 'master_list_editor'
             )
 
-            if st.button('Save Changes') : 
+            editor_state = st.session_state.get('master_list_editor', {})
+            has_pending_edits = editor_state.get('edited_rows') or editor_state.get('added_rows') or editor_state.get('deleted_rows')
+
+            if has_pending_edits : 
                 
                 temp_pl_df : pl.DataFrame = pl.from_pandas(edited_df)
                 
                 rename_map : dict[str , str] = {
-                    'Packing Price WOGST' : 'Pack Price' , 
-                    'Packing Price Currency' : 'Pack Price Currency' ,
+                    'Base CTN Price (SGD) (W/O GST)' : 'Pack Price' , 
                     'TMG Selling Price' : 'Selling Price' ,
                     'TMG Promotion Price' : 'Promotion Price' ,
-                    'Packing Size (PC)' : 'Packing Size'
+                    'Packing Size (PC)' : 'Packing Size' ,
+                    'Discount (%)' : 'Discount'
                 }
                 
                 for old_name , new_name in rename_map.items() : 
@@ -151,6 +124,9 @@ def handle_master_list_display() -> None :
                 final_save_df = final_save_df.select(final_ordered_cols)
                 
                 st.session_state.df = final_save_df
+                st.rerun()
+
+            if st.button('Save Changes') : 
                 
                 st.session_state.df.write_csv(
                     st.session_state.config['main']['path']['csv']

@@ -14,7 +14,8 @@ def get_display_df(
     sales_cols : list[str] = [
         'Selling Price' , 
         'Promotion Price' , 
-        'Previous Price'
+        'Previous Price' ,
+        'Discount'
     ]
     
     for col in sales_cols : 
@@ -41,6 +42,10 @@ def get_display_df(
                 Float64 , 
                 strict = False
             ).fill_null(0.0) , 
+            pl.col('Discount').cast(
+                Float64 , 
+                strict = False
+            ).fill_null(0.0) ,
             pl.col('Previous Price').cast(
                 Float64 , 
                 strict = False
@@ -70,17 +75,24 @@ def get_display_df(
         ).alias('Packing Size')
     )
 
+    # --- FIX: Calculate discount as a percentage of the Pack Price ---
+    df = df.with_columns(
+        (pl.col('Pack Price') * (1.0 - (pl.col('Discount') / 100.0))).alias('Discounted Pack Price')
+    )
+    # -----------------------------------------------------------------
+
     gst_rate : float = 0.09
 
     df = df.with_columns(
         [
-            (pl.col('Pack Price') / pl.col('Packing Size')).alias('CTN Price WOGST') , 
-            (pl.col('Pack Price') * (1.0 + gst_rate)).alias('Packing Price WGST')
+            (pl.col('Discounted Pack Price') / pl.col('Packing Size')).alias('CTN Price WOGST') , 
+            (pl.col('Discounted Pack Price') * (1.0 + gst_rate)).alias('Packing Price WGST')
         ]
     ).with_columns(
         [
             (pl.col('Packing Price WGST') / pl.col('Packing Size')).alias('CTN Price WGST') , 
-            pl.col('Pack Price').alias('Packing Price WOGST')
+            pl.col('Pack Price').alias('Base Packing Price WOGST') ,
+            pl.col('Discounted Pack Price').alias('Discounted Packing Price WOGST')
         ]
     )
 
@@ -119,8 +131,11 @@ def get_display_df(
         ]
     )
     
+    # --- FIX: Changed Discount to display as (%) ---
     rename_map : dict[str , str] = {
-        'Packing Price WOGST' : 'CTN Price (SGD) (W/O GST)' , 
+        'Base Packing Price WOGST' : 'Base CTN Price (SGD) (W/O GST)' , 
+        'Discount' : 'Discount (%)' ,
+        'Discounted Packing Price WOGST' : 'CTN Price (SGD) (W/O GST)' , 
         'Packing Size' : 'Packing Size (PC)' , 
         'CTN Price WOGST' : 'Unit Price (SGD) (W/O GST)' , 
         'Packing Price WGST' : 'Packing Price (SGD) (W GST)' , 
@@ -139,6 +154,8 @@ def get_display_df(
             'Product Name' , 
             'Supplier' , 
             'Previous Price' , 
+            'Base CTN Price (SGD) (W/O GST)' , 
+            'Discount (%)' ,
             'CTN Price (SGD) (W/O GST)' , 
             'Packing Size (PC)' ,  
             'Unit Price (SGD) (W/O GST)' , 

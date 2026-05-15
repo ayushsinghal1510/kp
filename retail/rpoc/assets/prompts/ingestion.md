@@ -10,7 +10,7 @@ Extract product pricing information from the attached file with absolute precisi
    - Use the following strict examples to determine the packing size:
      * "24 x 45g" -> Packing Size: 24 (starts with 24, no alpha character after it)
      * "24 x 45g x 34" -> Packing Size: 34
-     * "24s x 45g" -> Packing Size: 1 (starts with 24 but has an alpha 's', so it is treated as a single unit pack)
+     * "24s x 45g" -> Packing Size: 24 
      * "45g x 34" -> Packing Size: 34
      * "45g x 34s" -> Packing Size: 34
      * "24 x (12 x 20s)" -> Packing Size : 24
@@ -21,17 +21,27 @@ Extract product pricing information from the attached file with absolute precisi
      * "85g x24 (SG)" -> packing size : 24
      * "64g*6+2*8" : Packing size : 6
      * "120g*6*8" : Packing size : 48
+     * "<product> 10s" : packing size : 10
 
     If character is mentioned after the number, there is a good chance it is not the packing size, but if the charac is P or p or S or s or pcs or PKTS or pkts or packets, than it is indeed packing size
 
 2. PACK PRICE (CARTON PRICE) CALCULATION:
    - If the document explicitly provides a Pack Price or Carton Price, extract it directly.
-   - IF NO Pack Price / Carton Price is stated, you MUST calculate it on the fly using the Unit Price and the extracted Packing Size.
+   - IF NO Pack Price / Carton Price is stated, you MUST calculate it on the fly using the Unit Price and the extracted Packing Size. Sometimes the price can be like cost/pkt or cost/pk, that means that is the unit pice, so in this case pack price needs to be calculated.
    - Formula: Pack Price = Unit Price * Packing Size
 4. PACK PRICE (CTN PRICE): This is the price per carton/bag. Note that 'Pack Price' and 'CTN Price' denote the EXACT same thing.
     - If direct Unit Price is available WITH a Packing Size: Calculate Pack Price on the run -> `Packing Size * Unit Price`.
     - If direct Unit Price is available WITHOUT a Packing Size: The Unit Price IS the Pack Price.
     - NEVER use the total raw cost as the Unit Price.
+
+COST/PKT and COST/PK DISAMBIGUATION (CRITICAL):
+- Column headers like "COST/PKT", "COST/PK", "NEW COST/PK" always mean 
+  cost per individual PACKET (i.e., the Unit Price).
+- These are NEVER the carton/pack price.
+- You MUST multiply by Packing Size to get Pack Price.
+- Example: NEW COST/PK = $0.50, Packaging = "12pkt" 
+  → Pack Price = $0.50 x 12 = $6.00
+- "PK" here = packet (smallest unit), NOT carton.
 5. MISSING PRICES (SELLING & PROMOTION): It is completely normal for some documents to omit certain pricing tiers. 
     - SELLING PRICE: Extract the selling price if visible. If it is simply not available in the document , you MUST default to 0.0.
     - PROMOTION PRICE: Extract the promotion price if visible. If it is simply not available in the document , you MUST default to 0.0. Do NOT default this to the selling price.
