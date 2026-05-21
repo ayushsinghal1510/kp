@@ -24,4 +24,5 @@ members = [
     "services",
     "benchmarking/vpsb/postab",
     "retail/rpoc",
+    "retail/mt",
 ]

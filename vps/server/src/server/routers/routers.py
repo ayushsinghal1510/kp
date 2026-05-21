@@ -9,7 +9,6 @@ from ..llm import run_json_gemini
 from requests import Response
 import requests 
 
-
 async def add_scenario_route(
     query : str , 
     mongo_client : MongoClient , 
@@ -63,25 +62,26 @@ async def add_scenario_route(
 
             db = mongo_client[config['database-name']]
             collection = db[config['collection-name']]
-            
+
             # * Prepare document to insert
             scenario_doc = {
                 'scenario_name' : response.get('scenario_name' , '') , 
                 'scenario_prompt' : response.get('scenario_prompt' , '') , 
                 'questions_for_feedback' : response.get('questions_for_feedback' , []) , 
                 'difficulty_status' : response.get('difficulty_status' , '') , 
-                'api_key' : api_key
+                'api_key' : api_key , 
+                'movements' : response.get('movements' , [])
             }
-            
+
             # * Insert the document
             result = collection.insert_one(scenario_doc)
-            
+
             # * Add the inserted ID and API key to response
             response['_id'] = str(result.inserted_id)
             response['api_key'] = api_key
             response['status'] = 'success'
             response['message'] = 'Scenario added successfully'
-            
+
             print(f"✓ Scenario added with ID: {result.inserted_id}")
 
         except Exception as e : 
@@ -145,19 +145,19 @@ async def edit_scenario_route(
         workflow['nodes']['llm']['parameters']['system_prompt'] = response['scenario_prompt']
 
         api_response = requests.put(
-        'https://database.voxio.in/edit-flow' , 
-        json = {'flow_name' : response['scenario_name'] , 'agent' : {'workflow' : workflow}} ,
-        headers = {'api_key' : api_key , 'user_api_key' : os.environ['VOXIO_API_KEY']} ,
+            'https://database.voxio.in/edit-flow' , 
+            json = {'flow_name' : response['scenario_name'] , 'agent' : {'workflow' : workflow}} ,
+            headers = {'api_key' : api_key , 'user_api_key' : os.environ['VOXIO_API_KEY']} ,
         )
 
         try : 
 
             db = mongo_client[config['database-name']]
             collection = db[config['collection-name']]
-            
+
             # * Find the document by API key
             existing_doc = collection.find_one({'api_key': api_key})
-            
+
             if existing_doc is None : 
 
                 response['status'] = 'error'
@@ -165,10 +165,10 @@ async def edit_scenario_route(
                 print(f"✗ No scenario found with api_key: {api_key}")
 
                 return response
-            
+
             # * Prepare update data (only update fields that are present in response)
             update_data = {}
-            
+
             if 'scenario_name' in response : 
                 update_data['scenario_name'] = response['scenario_name']
 
@@ -180,26 +180,29 @@ async def edit_scenario_route(
 
             if 'difficulty_status' in response : 
                 update_data['difficulty_status'] = response['difficulty_status']
-            
+
+            if 'movement' in response : 
+                update_data['movements'] = response['movements']
+
             # * Update the document
             result = collection.update_one(
                 {'api_key' : api_key} , 
                 {'$set' : update_data}
             )
-            
+
             if result.modified_count > 0 : 
                 response['status'] = 'success'
                 response['message'] = 'Scenario updated successfully'
                 print(f"✓ Scenario updated for api_key: {api_key}")
 
-            else:
+            else : 
 
                 response['status'] = 'success'
                 response['message'] = 'No changes made (data was identical)'
                 response['modified_count'] = 0
-            
+
             response['api_key'] = api_key
-            
+
         except Exception as e : 
 
             print(f"✗ Error updating scenario in database: {e}")

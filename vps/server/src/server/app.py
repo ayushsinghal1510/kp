@@ -1,17 +1,20 @@
-from contextlib import asynccontextmanager
-from logging import Logger
 import os
-from deepgram import DeepgramClient
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi import FastAPI, Request , HTTPException, UploadFile
-from fastapi.responses import FileResponse
-from google.genai import Client
-from pymongo import MongoClient
 import uvicorn
+
+from logging import Logger
+from dotenv import load_dotenv
+from pymongo import MongoClient
+from deepgram import DeepgramClient
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI , Request , HTTPException 
+
+from google.genai import Client
+
+from fastapi.middleware.cors import CORSMiddleware
 
 from .loader import load_all_clients
 from .services import env_str_to_bool , env_str_to_list
-from dotenv import load_dotenv
 from .routers import add_scenario_route , edit_scenario_route
 
 load_dotenv()
@@ -93,37 +96,6 @@ async def edit_scenario(request : Request) -> dict :
     )
 
     return {'response' : response}
-
-@app.post('/stt')
-async def stt(file : UploadFile) : 
-    '''
-    Endpoint for Speech to Text using Deepgram
-    '''
-
-    audio_bytes : bytes = await file.read()
-
-    response = state.deepgram_client.listen.v1.media.transcribe_file(
-        request = audio_bytes , 
-        model = "nova-3"
-    )
-
-    transcription : str = response.results.channels[0].alternatives[0].transcript
-
-    return transcription
-
-@app.post('/tts')
-async def tts(text : str) : 
-
-    response = state.deepgram_client.speak.v1.audio.generate(
-        text = text , 
-        model = "aura-2-asteria-en"
-    )
-
-    audio_data = b"".join(response)
-    
-    with open("output.mp3", "wb") as audio_file:
-        audio_file.write(audio_data)
-    return FileResponse("output.mp3" , media_type = "audio/mpeg" , filename = "output.mp3")
 
 def main() : uvicorn.run(
     app , 
