@@ -41,6 +41,8 @@ If the configuration explicitly lists an interleaved multi-tier multiplier netwo
 
 #### D. General Reference Examples
 
+QTY to be considered always as quantity instead of packing size 
+
 * "24 x 45g" -> Packing Size: 24
 * "24 x 45g x 34" -> Packing Size: 34
 * "24s x 45g" -> Packing Size: 24
@@ -55,21 +57,88 @@ If the configuration explicitly lists an interleaved multi-tier multiplier netwo
 * "64g*6+2*8" -> Packing size : 6
 * "120g*6*8" -> Packing size : 48
 * " 10s" -> Packing size : 10
+* "CHEWY GINGER (ORI) 4 (20PKT X 125G) 4PKGCTN" : Packing size : 4 * 20 = 80
+* "240GM@10X12PCKS COLADA BIS.CORNIVAL NAIYU" : Packing size : 10 * 12 = 120 : @ acts as delimiter
+* "200GMX10@12PCK BIS.COLADA LIGHT TREAT C.C.SP" : Packing size : 12 : @ acts as delimiter
+
+* @ AS DELIMITER — TWO DISTINCT CASES:
+
+  CASE A: [weight]@[tierA]X[tierB] — @ appears right after the weight/GM value,
+  before any multiplier tiers. Treat everything after @ as a multi-tier grid.
+  Multiply all tiers together.
+  Example: "240GM@10X12PCKS" → 10 × 12 = 120
+  Example: "240GM@10X24PCKS" → 10 × 24 = 240
+
+  CASE B: [weight]X[tierA]@[tierB] — @ appears AFTER at least one X-multiplier 
+  tier. The @ acts as a hard reset. Discard everything before @. 
+  Take ONLY the number immediately after @.
+  Example: "200GMX10@12PCK" → 12 (ignore the X10 entirely)
+  Example: "200GMX10@24PCK" → 24 (ignore the X10 entirely)
+
+  KEY TEST: Is there an X-tier BEFORE the @? 
+  YES → Case B (take only after @). NO → Case A (multiply all after @).
+
+* FOC DETECTION & ADJUSTED PACK PRICE:
+
+  PATTERN: FOC items appear as a DUPLICATE line with the same barcode/
+  material number, but with Unit Price = 0.00 and a smaller quantity.
+  This 0.00-priced duplicate is the FOC quantity — NOT a free product 
+  to be extracted separately.
+
+  STEP 1 — DETECT: If the same barcode name appears more than once and one 
+  of those rows has Unit Price = 0.00, treat the 0.00 row as FOC.
+  Do NOT extract the 0.00 row as a separate product.
+
+  STEP 2 — MERGE: Combine both rows into one product entry.
+  - Paid Qty = quantity from the row with a real Unit Price
+  - FOC Qty = quantity from the 0.00 row
+  - Total Value = Value from the paid row only
+
+  STEP 3 — ADJUSTED PACK PRICE FORMULA:
+  Adjusted Pack Price = Total Value / (Paid Qty + FOC Qty)
+
+  Example from invoice:
+  Barcode 100541417, Paid Qty = 24, FOC Qty = 2, Total Value = 1,944.00
+  Adjusted Pack Price = 1,944.00 / (24 + 2) = 1,944.00 / 26 = 74.77
+
+  Example 2:
+  Barcode 100474283, Paid Qty = 12, FOC Qty = 1, Total Value = 604.44
+  Adjusted Pack Price = 604.44 / (12 + 1) = 604.44 / 13 = 46.50
+
+  IMPORTANT: If a product has NO 0.00 duplicate row, no FOC adjustment 
+  is made. Use Pack Price = U/Price × Packing Size as normal.
+---
+
+### 1. PACKING SIZE EXTRACTION
+
+* Find the packing tier multiplier strictly from the product text or description configuration patterns (e.g., "1*3" -> 3, "1*24" -> 24, "1*18" -> 18).
+* Never calculate a packing size by dividing document totals, dividing quantities, or matching "Pack UOM" against "Qty".
 
 ---
 
-### 2. PACK PRICE / CARTON PRICE CALCULATION & FOC ADJUSTMENTS
+### 2. PACK PRICE / CARTON PRICE CALCULATION (ZERO MATH EXCEPT MULTIPLICATION)
 
-* **Pack Price** and **CTN Price** denote the EXACT same thing (price per carton/bag).
-* Column headers like "COST/PKT", "COST/PK", or "NEW COST/PK" mean cost per individual packet (**Unit Price**). They are **never** the carton price.
-* **Base Formula:** If direct Unit Price is available, `Pack Price = Unit Price * Packing Size`. If direct Unit Price is available WITHOUT a Packing Size, the Unit Price IS the Pack Price.
+Rate means Packing price and not unit price
+If you see rate column, its packing price only
+* **CRITICAL MANDATE:** You are strictly forbidden from looking at the "Total" or "Total RM" columns to calculate or cross-verify prices. Do NOT reverse-engineer prices using row totals or overall quantities.
+* **DISCOUNTS & FOC:** Assume all discounts are 0%. Completely ignore dicsount based columns, the current discount is 0, FOC is there, but the current discount is always 0.
+* **THE ONLY VALID PRICE FORMULA:** Locate the raw, single unit price printed in the "U/ Price" or "Unit Price" column. 
+  * `Pack Price = [U/ Price Column Value] * [Packing Size]`
+  * **Example:** If "U/ Price" is visually printed as 12.31000 and "Packing Size" is extracted as 3, the calculation MUST be exactly: 12.31 * 3 = 36.93. 
+  * Do not adjust, do not slice, do not round intermediate states, and do not use any hidden values. Use exactly what your eyes see in the unit price field.* *Note:* Use the raw, undiscounted Unit Price to find the "Stated Pack Price" before applying this formula.* *Exampl   e:* A supplier lists a product at a CTN Price of $10. The buyer purchases 10 CTNs ($100 total value) and receives 1 extra CTN for free (1 FOC). The adjusted Pack Price is calculated as `$100 / (10 + 1) = $9.09`.
 
-#### FOC (Free of Charge) Amortization Rule
+* **DISCOUNTS — ALWAYS ZERO:** The "Disc" column must be completely ignored 
+  in all calculations. Treat it as if it does not exist on the page. 
+  Never multiply U/Price by (1 - disc%). 
+  WRONG: 12.31 × 0.96 × 3 = 35.45 ← FORBIDDEN
+  CORRECT: 12.31 × 3 = 36.93 ← ONLY valid formula
 
-If an invoice line features FOC items, the static item cost is altered because the free items lower the effective unit cost across the total shipment. You must adjust the Pack Price dynamically based on the total paid amount distributed over the true total received quantity (Paid + FOC).
-
-* **Amortized Pack Price Formula:** `(Paid Quantity * Stated Pack Price) / (Paid Quantity + FOC Quantity)`
-* *Example:* A supplier lists a product at a CTN Price of $10. The buyer purchases 10 CTNs ($100 total value) and receives 1 extra CTN for free (1 FOC). The adjusted Pack Price is calculated as `$100 / (10 + 1) = $9.09`.
+* **FOC (Free of Charge) — APPLY THIS ADJUSTMENT:** If a FOC quantity is 
+  stated (e.g. buy 10 get 1 free), adjust the Pack Price as follows:
+  Adjusted Pack Price = (Purchased Qty × Pack Price) / (Purchased Qty + FOC Qty)
+  Example: Pack Price = 36.93, buy 10 get 1 FOC →
+  Adjusted Pack Price = (10 × 36.93) / (10 + 1) = 369.30 / 11 = 33.57
+  If no FOC quantity is stated, do NOT apply any FOC adjustment.
 
 ---
 
