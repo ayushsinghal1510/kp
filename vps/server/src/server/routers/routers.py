@@ -41,18 +41,24 @@ async def add_scenario_route(
     workflow['variables']['feedback_questions']['value'] = response['questions_for_feedback']
     workflow['nodes']['llm']['parameters']['system_prompt'] = response['scenario_prompt']
 
-    print(os.environ['VOXIO_API_KEY'])
+    # print(os.environ['VOXIO_API_KEY'])
 
-    print(workflow)
+    # print(workflow)
 
     api_response : Response = requests.post(
         'https://database.voxio.in/flow' , 
         json = {
-            'agent' : {'workflow' : workflow} , 
+            'agent' : {
+                'workflow' : workflow , 
+            } , 
             'flow_name' : response['scenario_name'] ,
+            'process_type' : 'speech-native' , 
+            'xml' : ''
         } , 
         headers = {'api_key' : os.environ['VOXIO_API_KEY']}
     )
+
+    print(api_response.status_code , api_response.json())
 
     if api_response.status_code == 200 : 
 
@@ -146,7 +152,9 @@ async def edit_scenario_route(
 
         api_response = requests.put(
             'https://database.voxio.in/edit-flow' , 
-            json = {'flow_name' : response['scenario_name'] , 'agent' : {'workflow' : workflow}} ,
+            json = {'flow_name' : response['scenario_name'] , 'agent' : {'workflow' : workflow} ,             'process_type' : 'speech-native' , 
+            'xml' : ''
+} ,
             headers = {'api_key' : api_key , 'user_api_key' : os.environ['VOXIO_API_KEY']} ,
         )
 

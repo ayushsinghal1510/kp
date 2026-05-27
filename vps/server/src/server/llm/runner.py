@@ -53,8 +53,6 @@ async def run_json_gemini(
                 model
             )
             
-            print(rerun_response)
-            
             try : 
                 
                     rerun_processed_response : str = rerun_response.replace('json' , '').replace('`' , '').strip()
