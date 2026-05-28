@@ -10,6 +10,7 @@ from typing import Any
 
 from google.genai import types
 
+
 def _extract_content_from_file(
     uploaded_file : Any , 
     prompt : str
@@ -101,19 +102,6 @@ def _extract_content_from_file(
 
     return content
 
-
-import json
-import streamlit as st
-
-from typing import Any
-from google.genai import types
-
-import re
-import json
-import streamlit as st
-
-from typing import Any
-from google.genai import types
 
 def _call_llm_with_retries(
     content : list[Any] , 
@@ -208,6 +196,7 @@ def _call_llm_with_retries(
 
     return {}
 
+
 def _process_and_deduplicate_products(
     data : dict[str , Any]
 ) -> list[dict[str , Any]] : 
@@ -228,19 +217,14 @@ def _process_and_deduplicate_products(
         []
     )
 
-    # --- FIX: Preserve case (A-Z) for display, but strip special chars ---
+    # Collapses multiple spaces/newlines, but keeps asterisks and original text
     supplier_display : str = re.sub(
         r'\s+' , 
         ' ' , 
-        re.sub(
-            r'[^a-zA-Z0-9\(\)\[\] ]' , 
-            '' , 
-            raw_supplier
-        )
+        raw_supplier
     ).strip()
     
     supplier_search_key : str = supplier_display.lower()
-    # ---------------------------------------------------------------------
 
     deduplicated_products : dict[str , dict[str , Any]] = {}
 
@@ -251,19 +235,14 @@ def _process_and_deduplicate_products(
 
         original_name : str = raw_product_name or raw_product_description or 'Unknown'
 
-        # --- FIX: Preserve case (A-Z) for display ---
+        # Only standardizes white-spaces while safely safeguarding special characters
         sanitized_name_display : str = re.sub(
             r'\s+' , 
             ' ' , 
-            re.sub(
-                r'[^a-zA-Z0-9\(\)\[\] ]' , 
-                '' , 
-                original_name
-            )
+            original_name
         ).strip()
         
         sanitized_search_key : str = sanitized_name_display.lower()
-        # --------------------------------------------
 
         prod['Product Name'] = sanitized_name_display
 
@@ -271,7 +250,6 @@ def _process_and_deduplicate_products(
 
         prod['Pack Price'] = raw_pack_price
 
-        # --- FIX: Use the lowercase search key for the dictionary logic ---
         if sanitized_search_key in deduplicated_products : 
 
             existing_price : float = float(
@@ -296,7 +274,6 @@ def _process_and_deduplicate_products(
 
         else : 
             deduplicated_products[sanitized_search_key] = prod
-        # ------------------------------------------------------------------
 
     for product in deduplicated_products.values() : 
 
@@ -317,7 +294,7 @@ def _process_and_deduplicate_products(
                 'Pack Price' : pack_price_val , 
                 'Selling Price' : selling_price_val , 
                 'Promotion Price' : promotion_price_val , 
-                'Supplier' : supplier_display , # Use the cased display name
+                'Supplier' : supplier_display , 
                 'Redundant' : json.dumps(
                     product.get('Redundant' , [])
                 )
@@ -331,6 +308,7 @@ def _process_and_deduplicate_products(
     st.write(f'Products added with exchange rate : {exchange_rate}')
     
     return processed_items
+
 
 def process_document_with_llm(
     uploaded_file : Any , 

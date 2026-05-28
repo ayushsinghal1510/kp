@@ -108,27 +108,29 @@ def normalize_string(
     text : Any
 ) -> str | None : 
 
-    if text is None : 
-        return None
+    return text
 
-    if isinstance(
-        text , 
-        float
-    ) and math.isnan(text) : 
-        return None
+    # if text is None : 
+    #     return None
 
-    val_str : str = str(text)
+    # if isinstance(
+    #     text , 
+    #     float
+    # ) and math.isnan(text) : 
+    #     return None
+
+    # val_str : str = str(text)
     
-    if val_str.lower() == 'nan' or not val_str.strip() : 
-        return None
+    # if val_str.lower() == 'nan' or not val_str.strip() : 
+    #     return None
 
-    normalized : str = re.sub(
-        r'[^a-z0-9\(\)\[\] ]' , 
-        '' , 
-        val_str.lower()
-    ).strip()
+    # normalized : str = re.sub(
+    #     r'[^a-z0-9\(\)\[\] ]' , 
+    #     '' , 
+    #     val_str.lower()
+    # ).strip()
 
-    return normalized if normalized else None
+    # return normalized if normalized else None
 
 import os
 
