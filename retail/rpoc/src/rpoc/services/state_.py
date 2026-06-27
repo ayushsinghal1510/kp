@@ -17,10 +17,11 @@ def load_session_state() :
     if 'groq_client' not in st.session_state : 
         st.session_state.groq_client = Groq(api_key = os.environ['GROQ_API_KEY'])
 
-    if 'gemini_client' not in st.session_state : 
+    if 'gemini_client' not in st.session_state :
         st.session_state.gemini_client = genai.Client(
-        api_key=os.environ.get("GEMINI_API_KEY"),
-    )
+            vertexai = True ,
+            api_key  = os.environ.get('GEMINI_API_KEY') ,
+        )
 
     if 'config' not in st.session_state : 
 
@@ -65,16 +66,18 @@ def load_session_state() :
         st.session_state.purchases = load_json(st.session_state.config['main']['path']['purchases'])
 
     st.session_state.root_csv_columns = [
-        'Barcode' , 
-        'Product Name' , 
-        'Packing Size' , 
-        'Previous Price' , 
-        'Discount' , 
-        'Pack Price' , 
-        'Supplier' , 
-        'Selling Price' , 
-        'Promotion Price' , 
-        'Other' , 
+        'Barcode' ,
+        'Product Name' ,
+        'Packing Size String' ,
+        'Packing Size' ,
+        'Packing Calc' ,
+        'Previous Price' ,
+        'Discount' ,
+        'Pack Price' ,
+        'Supplier' ,
+        'Selling Price' ,
+        'Promotion Price' ,
+        'Other' ,
         'Filename'
     ]
 

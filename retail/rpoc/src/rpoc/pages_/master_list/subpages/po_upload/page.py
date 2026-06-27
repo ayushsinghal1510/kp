@@ -225,22 +225,31 @@ def handle_po_approval_section() -> None :
     select_all : bool = st.checkbox('Select All Products')
     
     merged_df.insert(
-        0 , 
-        'Approve' , 
+        0 ,
+        'Approve' ,
         select_all
     )
-    
+
+    if 'Packing Size String' in merged_df.columns :
+        merged_df['Packing Size String'] = (
+            merged_df['Packing Size String']
+            .astype(str)
+            .str.replace('igno' , '' , regex = False)
+        )
+
     display_cols : list[str] = [
-        'Approve' , 
-        'Product Name' , 
-        'Supplier' , 
-        'Current Packing Size' , 
-        'Incoming Packing Size' , 
-        'Current Packing Price' , 
-        'Incoming Packing Price' , 
-        'Current Unit Price' , 
-        'Incoming Unit Price' , 
-        'Current Selling Price' , 
+        'Approve' ,
+        'Product Name' ,
+        'Supplier' ,
+        'Packing Size String' ,
+        'Current Packing Size' ,
+        'Incoming Packing Size' ,
+        'Packing Calc' ,
+        'Current Packing Price' ,
+        'Incoming Packing Price' ,
+        'Current Unit Price' ,
+        'Incoming Unit Price' ,
+        'Current Selling Price' ,
         'Incoming Selling Price'
     ]
     

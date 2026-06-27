@@ -10,6 +10,8 @@ from typing import Any
 
 from google.genai import types
 
+from rpoc.services.packing_ import parse_packing_size
+
 
 def _extract_content_from_file(
     uploaded_file : Any , 
@@ -161,7 +163,7 @@ def _call_llm_with_retries(
             )
 
             response : Any = model_client.models.generate_content(
-                model = 'gemini-2.5-flash' , 
+                model = 'gemini-3.1-flash-lite' , 
                 contents = formatted_contents , 
                 config = generation_config
             )
@@ -287,14 +289,28 @@ def _process_and_deduplicate_products(
             selling_price_val : float = float(product.pop('Selling Price' , 0.0) or 0.0)
             promotion_price_val : float = float(product.pop('Promotion Price' , 0.0) or 0.0)
 
+            # The model emits a canonical packing-size STRING; the number is
+            # computed deterministically here, never by the model.
+            packing_string : str = str(
+                product.get('Packing Size String' , '') or ''
+            ).strip()
+
+            # Backward-compat: fall back to a bare number if that is all we got.
+            if not packing_string :
+                packing_string = str(product.get('Packing Size' , '') or '').strip()
+
+            packing_size , packing_calc = parse_packing_size(packing_string)
+
             product_dict : dict[str , Any] = {
-                'Barcode' : product.pop('Barcode' , '') , 
-                'Product Name' : product.pop('Product Name' , 'Unknown') , 
-                'Packing Size' : int(product.pop('Packing Size' , 1) or 1) , 
-                'Pack Price' : pack_price_val , 
-                'Selling Price' : selling_price_val , 
-                'Promotion Price' : promotion_price_val , 
-                'Supplier' : supplier_display , 
+                'Barcode' : product.pop('Barcode' , '') ,
+                'Product Name' : product.pop('Product Name' , 'Unknown') ,
+                'Packing Size String' : packing_string ,
+                'Packing Size' : packing_size ,
+                'Packing Calc' : packing_calc ,
+                'Pack Price' : pack_price_val ,
+                'Selling Price' : selling_price_val ,
+                'Promotion Price' : promotion_price_val ,
+                'Supplier' : supplier_display ,
                 'Redundant' : json.dumps(
                     product.get('Redundant' , [])
                 )

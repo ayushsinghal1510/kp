@@ -47,15 +47,17 @@ def sanitize_dataframe_for_polars(
         df = df.with_columns(missing_cols)
 
     string_columns : list[str] = [
-        'Barcode' , 
-        'Product Name' , 
-        'Pack Price Currency' , 
-        'Supplier' , 
-        'Other' , 
-        'Filename' , 
-        'Redundant' , 
-        'Previous' , 
-        'Match Product Name' , 
+        'Barcode' ,
+        'Product Name' ,
+        'Packing Size String' ,
+        'Packing Calc' ,
+        'Pack Price Currency' ,
+        'Supplier' ,
+        'Other' ,
+        'Filename' ,
+        'Redundant' ,
+        'Previous' ,
+        'Match Product Name' ,
         'Match Supplier'
     ]
 

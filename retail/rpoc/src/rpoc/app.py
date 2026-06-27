@@ -13,6 +13,8 @@ st.set_page_config(layout="wide")
 pages = {
     "Master List" : [
         st.Page("pages_/master_list/mlpage.py", title="Master List", icon="📋"),
+        st.Page("pages_/new_master_list/nmlpage.py", title="New Master List", icon="🗂️"),
+        st.Page("pages_/update_master_list/umlpage.py", title="Update Master List", icon="🔄"),
     ],
     "Chatbot" : [
         st.Page("pages_/chatbot/chpage.py", title="Chatbot", icon="🧠"),
