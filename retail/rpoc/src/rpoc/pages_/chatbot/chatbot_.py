@@ -83,8 +83,6 @@ def handle_data_agent_chat() -> None :
         retries : int = 0
         final_response : str | None = None
 
-        debug_log : list[dict[str , Any]] = []
-
         with st.chat_message('assistant') :
 
             status_placeholder : Any = st.empty()
@@ -127,30 +125,18 @@ def handle_data_agent_chat() -> None :
                         re.DOTALL | re.IGNORECASE
                     )
 
-                    attempt_dbg : dict[str , Any] = {
-                        'attempt' : retries + 1 ,
-                        'raw' : raw_content
-                    }
-
                     if not code_match :
-
-                        attempt_dbg['error'] = 'No ```python code block found in the model response.'
-                        debug_log.append(attempt_dbg)
 
                         retries += 1
                         continue
 
                     code : str = code_match.group(1).strip()
-                    attempt_dbg['code'] = code
 
                     run_ok : bool
                     out : str
                     err : str
 
                     run_ok , out , err = execute_code(code)
-
-                    attempt_dbg['run_ok'] = run_ok
-                    attempt_dbg['result'] = out if run_ok else err
 
                     if not run_ok :
 
@@ -171,9 +157,6 @@ def handle_data_agent_chat() -> None :
 
                     decision : str = rev_res.choices[0].message.content
 
-                    attempt_dbg['decision'] = decision
-                    debug_log.append(attempt_dbg)
-
                     if 'RETRY' in decision :
                         retries += 1
 
@@ -186,31 +169,9 @@ def handle_data_agent_chat() -> None :
                 status_placeholder.empty()
 
                 if not final_response :
-                    final_response = 'I couldn\'t answer that. Please check the product name, or open the debug panel below to see what went wrong.'
+                    final_response = 'I couldn\'t answer that. Please check the product name and try again.'
 
             st.markdown(final_response)
-
-            with st.expander('🔧 Agent debug (generated code, results, review)') :
-
-                if not debug_log :
-                    st.write('No attempts were recorded.')
-
-                for entry in debug_log :
-
-                    st.markdown(f"**Attempt {entry['attempt']}**")
-
-                    if 'code' in entry :
-                        st.code(entry['code'] , language = 'python')
-                    else :
-                        st.warning(entry.get('error' , 'No code extracted.'))
-                        st.code(entry.get('raw' , '') , language = 'markdown')
-
-                    if 'result' in entry :
-                        st.text(f"run_ok = {entry.get('run_ok')}")
-                        st.code(str(entry['result']) , language = 'text')
-
-                    if 'decision' in entry :
-                        st.markdown(f"_Review:_ {entry['decision']}")
 
             st.download_button(
                 **st.session_state.chatbot_config['message-pdf-download'] , 
