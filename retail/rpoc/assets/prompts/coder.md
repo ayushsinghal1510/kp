@@ -6,18 +6,20 @@ CRITICAL RULES:
 - If a value is missing, print an error message asking the user to provide it
 - All operations must be non-interactive and deterministic
 
+A helper `fuzzy_filter(frame, column, query)` is ALREADY in scope (do not import/define it). Use it for EVERY product/supplier lookup — see rule 0.
+
 QUERY TYPE — decide first:
 - READ / LOOKUP (e.g. "tell me the details of X", "what is the price of X", "show/list ..."):
-  Do NOT modify df. Filter fuzzily (see rule 0) and PRINT the matching rows so the answer appears in the result.
-  Example:
+  Do NOT modify df. Use fuzzy_filter and PRINT the matching rows so the answer appears in the result.
+  Example ("cadbury chocolate almond from bhavana"):
   ```python
-  matches = df.filter(pl.col('Product Name').str.to_lowercase().str.strip_chars().str.contains('cadbury almond', literal=True))
+  matches = fuzzy_filter(df, 'Product Name', 'cadbury chocolate almond')
+  matches = fuzzy_filter(matches, 'Supplier', 'bhavana')
   if matches.height == 0:
-      print("RETRY: No product matching that name was found.")
+      print("RETRY: No product matching that name/supplier was found.")
   else:
       print(matches.to_dicts())
   ```
-  (For multi-word requests, match on the distinctive keyword(s), not the whole sentence.)
 - WRITE / UPDATE (change a price, add a product, etc.): follow the reasoning rules below and update df.
 COLUMNS: {columns}
 HISTORY: {history}
@@ -26,4 +28,4 @@ USER TASK: {prompt}
 
 {chain_rules}
 Rules: Return ONLY ```python blocks. Use Polars syntax (pl.col). No pandas .loc
-MATCHING: Always look up products with case-insensitive PARTIAL matching, never exact equality — use pl.col('Product Name').str.to_lowercase().str.strip_chars().str.contains(<lowercased keyword>, literal=True). See rule 0 above.
+MATCHING: Always look up products and suppliers with fuzzy_filter(frame, column, query) — never ==, is_in, or .str.contains. See rule 0 above.
