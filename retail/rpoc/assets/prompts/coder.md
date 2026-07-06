@@ -12,3 +12,4 @@ USER TASK: {prompt}
 
 {chain_rules}
 Rules: Return ONLY ```python blocks. Use Polars syntax (pl.col). No pandas .loc
+MATCHING: Always look up products with case-insensitive PARTIAL matching, never exact equality — use pl.col('Product Name').str.to_lowercase().str.strip_chars().str.contains(<lowercased keyword>, literal=True). See rule 0 above.
