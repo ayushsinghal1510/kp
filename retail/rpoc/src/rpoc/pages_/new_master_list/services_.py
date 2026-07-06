@@ -15,6 +15,8 @@ NML_COLUMNS: list[str] = [
     "Packing Style",
     "Packing Size",
     "Packing Price",
+    "Previous Packing Price",
+    "Exchange Rate",
     "Supplier",
 ]
 
@@ -79,10 +81,16 @@ def detect_columns_with_gemini(preview_csv: str) -> dict[str, Any]:
         "   b. As a value in a metadata row above the table header (e.g. 'Supplier: ABC Trading', "
         "'Company: XYZ Pte Ltd') — extract the actual name string and return it as `supplier_name`.\n"
         "   If both forms exist, prefer the column. Set whichever does not apply to null.\n"
-        "5. The 0-based row index of the **actual table header** (the row with column names).\n\n"
+        "5. The **exchange rate** (currency conversion factor, e.g. '汇率', 'Rate', 'Exchange Rate', "
+        "'CNY/SGD'). This may appear in two ways:\n"
+        "   a. As a column in the data table — return the exact column name as `exchange_rate_col`.\n"
+        "   b. As a numeric value in a metadata row (e.g. '汇率: 4.52', 'Rate = 0.19') — extract "
+        "the number as `exchange_rate_value` (float).\n"
+        "   If both forms exist, prefer the column. Set whichever does not apply to null.\n"
+        "6. The 0-based row index of the **actual table header** (the row with column names).\n\n"
         "Respond ONLY with a valid JSON object with keys: "
         '"product_name_col", "packing_size_col", "packing_price_col", '
-        '"supplier_col", "supplier_name", "header_row". '
+        '"supplier_col", "supplier_name", "exchange_rate_col", "exchange_rate_value", "header_row". '
         "Set a value to null if it cannot be identified. No markdown, no explanation."
     )
 
@@ -155,6 +163,9 @@ def _parse_single_sheet(
         select_cols.append(supplier_col)
         rename_map[supplier_col] = "Supplier"
 
+    exchange_rate_col: str | None = _find_col(col_mapping.get("exchange_rate_col"), actual_cols)
+    exchange_rate_value: Any = col_mapping.get("exchange_rate_value")
+
     result: pd.DataFrame = df[select_cols].rename(columns=rename_map)
 
     result = result[result["Product Name"].notna()]
@@ -165,6 +176,23 @@ def _parse_single_sheet(
     # If supplier came from metadata (not a column), fill every row with the literal
     if "Supplier" not in result.columns and supplier_name:
         result["Supplier"] = supplier_name
+
+    # Determine exchange rate for this sheet and add as a constant column
+    sheet_exchange_rate: float | None = None
+    if exchange_rate_col and exchange_rate_col in df.columns:
+        try:
+            rate_vals = pd.to_numeric(df[exchange_rate_col], errors="coerce").dropna()
+            if not rate_vals.empty:
+                sheet_exchange_rate = float(rate_vals.iloc[0])
+        except Exception:
+            pass
+    elif exchange_rate_value is not None:
+        try:
+            sheet_exchange_rate = float(exchange_rate_value)
+        except (ValueError, TypeError):
+            pass
+
+    result["Exchange Rate"] = sheet_exchange_rate
 
     return result
 
@@ -284,12 +312,14 @@ def build_nml_dataframe(
     has_size: bool = "Packing Size" in parsed_df.columns
     has_price: bool = "Packing Price" in parsed_df.columns
     has_supplier: bool = "Supplier" in parsed_df.columns
+    has_exchange_rate: bool = "Exchange Rate" in parsed_df.columns
 
     for i, row_dict in enumerate(parsed_df.to_dict(orient="records")):
         product_name: str = str(row_dict.get("Product Name", "")).strip()
         packing_size: Any = row_dict.get("Packing Size") if has_size else None
         packing_price: Any = row_dict.get("Packing Price") if has_price else None
         supplier: Any = str(row_dict.get("Supplier", "")).strip() if has_supplier else None
+        exchange_rate: Any = row_dict.get("Exchange Rate") if has_exchange_rate else None
 
         split: dict[str, str] = split_results[i] if i < len(split_results) else {}
 
@@ -300,13 +330,15 @@ def build_nml_dataframe(
                 "Packing Style": split.get("packing_style", ""),
                 "Packing Size": packing_size,
                 "Packing Price": packing_price,
+                "Previous Packing Price": None,
+                "Exchange Rate": exchange_rate,
                 "Supplier": supplier,
             }
         )
 
     df: pl.DataFrame = pl.DataFrame(rows)
 
-    for col in ("Packing Size", "Packing Price"):
+    for col in ("Packing Size", "Packing Price", "Previous Packing Price", "Exchange Rate"):
         if col in df.columns:
             df = df.with_columns(pl.col(col).cast(pl.Float64, strict=False).alias(col))
 

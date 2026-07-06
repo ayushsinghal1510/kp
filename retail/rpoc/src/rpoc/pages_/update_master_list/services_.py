@@ -9,7 +9,6 @@ from google.genai import types
 from rpoc.pages_.new_master_list.services_ import (
     NML_CSV_PATH,
     NML_COLUMNS,
-    split_product_names_with_groq,
     load_nml_csv,
     save_nml_csv,
 )
@@ -21,7 +20,7 @@ def get_supplier_list() -> list[str]:
     df: pl.DataFrame = load_nml_csv()
     if "Supplier" not in df.columns or df.is_empty():
         return []
-    suppliers: list[str] = (
+    return (
         df.select("Supplier")
         .drop_nulls()
         .filter(pl.col("Supplier").str.strip_chars() != "")
@@ -30,20 +29,36 @@ def get_supplier_list() -> list[str]:
         .get_column("Supplier")
         .to_list()
     )
-    return suppliers
 
 
 def get_supplier_df_csv(supplier: str) -> str:
-    """Return a CSV string of all rows for the given supplier."""
+    """Return a CSV of the supplier's catalogue for LLM naming context."""
     df: pl.DataFrame = load_nml_csv()
     filtered: pl.DataFrame = df.filter(
         pl.col("Supplier").str.strip_chars().str.to_lowercase()
         == supplier.strip().lower()
     )
-    return filtered.write_csv()
+    context_cols = [
+        c for c in ["Product Name", "Processed Product Name", "Packing Style", "Packing Size", "Supplier"]
+        if c in filtered.columns
+    ]
+    return filtered.select(context_cols).write_csv()
 
 
-# ── Gemini: analyse invoice against supplier catalogue ────────────────────────
+# ── Fuzzy matching ────────────────────────────────────────────────────────────
+
+def _normalize_for_match(name: str) -> str:
+    """Lowercase, strip punctuation, collapse whitespace.
+
+    (Milk) and Milk both normalize to 'milk'; mlk does not match milk.
+    """
+    name = name.lower()
+    name = re.sub(r"[^a-z0-9\s]", " ", name)
+    name = re.sub(r"\s+", " ", name).strip()
+    return name
+
+
+# ── Gemini: extract products from invoice ────────────────────────────────────
 
 def analyse_invoice_with_gemini(
     pdf_bytes: bytes,
@@ -52,74 +67,64 @@ def analyse_invoice_with_gemini(
     supplier_name: str,
 ) -> dict[str, Any]:
     """
-    Sends the supplier's existing product catalogue (CSV) + the invoice PDF to
-    Gemini.  Gemini returns a JSON with three keys:
+    Extracts raw product data from the invoice. Matching against the catalogue
+    is done by the caller — Gemini only extracts and normalises names.
 
+    Returns:
     {
-      "updates": [
+      "exchange_rate": float,
+      "products": [
         {
-          "csv_product_name": "<exact name from the CSV>",
-          "old_price": <float>,
-          "new_price": <float>
+          "product_name":   str,   # raw name from invoice
+          "processed_name": str,   # core brand/product name (no size/format)
+          "packing_style":  str,   # size/format suffix, e.g. "800ML"
+          "packing_size":   int,   # units per carton/pack
+          "packing_price":  float  # price in invoice native currency (before exchange rate)
         }
-      ],
-      "new_products": [
-        {
-          "product_name": "<name as it appears on the invoice>",
-          "packing_price": <float>,
-          "inferred_packing_size": <int/float>,
-          "inference_reason": "<short explanation>"
-        }
-      ],
-      "unchanged": ["<csv_product_name>", ...]
+      ]
     }
     """
 
     system_prompt: str = f"""
-You are an expert retail inventory analyst for supplier "{supplier_name}".
+You are a data extraction expert for supplier "{supplier_name}".
 
 You will receive:
-1. A CSV of the supplier's existing product catalogue with columns:
-   Product Name | Processed Product Name | Packing Style | Packing Size | Packing Price | Supplier
-   - Packing Size = number of units per carton/pack.
-   - Packing Price = cost per full carton/pack (not per unit).
+1. A reference product catalogue (for naming context only — do NOT match or classify against it).
+   Study it to understand the naming convention: what is a "core product name" vs a "packing style".
+2. An invoice PDF from this supplier.
 
-2. An invoice PDF from the same supplier listing products and their prices.
+TASK 1 — Extract the exchange rate.
+Find the currency conversion rate on the invoice (look for "汇率", "Rate", "Exchange Rate",
+"CNY/SGD", or a line like "1 CNY = 0.19 SGD"). Return it as a float. If absent, return 1.0.
 
-Your job:
+TASK 2 — Extract every product line item from the invoice.
+For each product line:
+  - product_name:   the raw product description exactly as written on the invoice
+  - processed_name: the core brand/product name ONLY — no size, no format, no packing notation.
+                    Use the same capitalisation and spelling style as the reference catalogue.
+                    E.g. if catalogue uses "Mirinda", don't return "MIRINDA" or "mirinda orange".
+  - packing_style:  the size/volume/weight/format suffix only (e.g. "800ML", "1.5L", "250G").
+                    Empty string if none.
+  - packing_size:   number of units per carton/pack as an integer.
+  - packing_price:  the price in the invoice's native currency — do NOT apply exchange rate.
 
-STEP 1 — Learn the catalogue pattern.
-Study how Product Name relates to Packing Size across all rows.
-For example, if every "500ML" product has Packing Size 24 and every "1.5L" product
-has Packing Size 12, remember this pattern. You will need it for new products.
+Ignore sub-totals, totals, taxes, FOC rows, discount rows, and header rows.
 
-STEP 2 — Extract invoice line items.
-From the PDF, extract every product description and its price per carton/pack.
-Ignore sub-totals, totals, taxes, and header rows.
-
-STEP 3 — Match and classify each invoice item:
-  A. If the invoice product matches an existing catalogue row (fuzzy match on name):
-       - If the invoice price == catalogue Packing Price → classify as "unchanged".
-       - If the invoice price != catalogue Packing Price → classify as "update_price".
-         Use the EXACT "Product Name" value from the CSV for csv_product_name.
-  B. If the invoice product does NOT match any catalogue row → classify as "new_product".
-     Infer its Packing Size from the pattern you learned in Step 1
-     (look at similar brands, similar size suffixes like ML/L/G/KG).
-
-Return ONLY a valid JSON object with exactly these three keys:
+Return ONLY valid JSON — no markdown, no explanation:
 {{
-  "updates": [
-    {{"csv_product_name": "...", "old_price": 0.0, "new_price": 0.0}}
-  ],
-  "new_products": [
-    {{"product_name": "...", "packing_price": 0.0, "inferred_packing_size": 0, "inference_reason": "..."}}
-  ],
-  "unchanged": ["..."]
+  "exchange_rate": 1.0,
+  "products": [
+    {{
+      "product_name": "...",
+      "processed_name": "...",
+      "packing_style": "...",
+      "packing_size": 12,
+      "packing_price": 0.0
+    }}
+  ]
 }}
 
-No markdown, no explanation outside the JSON.
-
---- CATALOGUE CSV ---
+--- REFERENCE CATALOGUE (naming context only) ---
 {supplier_csv}
 --- END CATALOGUE ---
 """
@@ -128,11 +133,9 @@ No markdown, no explanation outside the JSON.
         types.Part.from_text(text=system_prompt),
         types.Part.from_bytes(data=pdf_bytes, mime_type=pdf_mime_type),
     ]
-
     contents: list[Any] = [types.Content(role="user", parts=parts)]
 
     raw: str = ""
-
     for attempt in range(3):
         try:
             response: Any = st.session_state.gemini_client.models.generate_content(
@@ -154,22 +157,104 @@ No markdown, no explanation outside the JSON.
     return {}
 
 
+# ── App-level matching ────────────────────────────────────────────────────────
+
+def match_invoice_products(
+    supplier: str,
+    invoice_products: list[dict[str, Any]],
+    exchange_rate: float,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], int]:
+    """
+    Fuzzy-matches invoice products against the master list on
+    (normalize(Processed Product Name), normalize(Packing Style)).
+
+    Returns:
+      - updates:          products whose price changed
+      - new_products:     products not found in master list
+      - unchanged_count:  matched products with identical price
+    Prices in both lists are already converted to SGD (÷ exchange_rate).
+    """
+    df: pl.DataFrame = load_nml_csv()
+    supplier_df: pl.DataFrame = df.filter(
+        pl.col("Supplier").str.strip_chars().str.to_lowercase()
+        == supplier.strip().lower()
+    )
+
+    # Build lookup: normalize(processed_name)|normalize(packing_style) → row dict
+    lookup: dict[str, dict[str, Any]] = {}
+    for row in supplier_df.to_dicts():
+        key = (
+            _normalize_for_match(str(row.get("Processed Product Name") or ""))
+            + "|"
+            + _normalize_for_match(str(row.get("Packing Style") or ""))
+        )
+        lookup[key] = row
+
+    rate: float = exchange_rate if exchange_rate else 1.0
+
+    updates: list[dict[str, Any]] = []
+    new_products: list[dict[str, Any]] = []
+    unchanged_count: int = 0
+
+    for prod in invoice_products:
+        processed: str = prod.get("processed_name", "")
+        style: str = prod.get("packing_style", "")
+        key: str = _normalize_for_match(processed) + "|" + _normalize_for_match(style)
+        sgd_price: float = round(float(prod["packing_price"]) / rate, 4)
+
+        if key in lookup:
+            existing = lookup[key]
+            old_price = existing.get("Packing Price")
+            old_float = float(old_price) if old_price is not None else None
+
+            if old_float is None or abs(old_float - sgd_price) > 0.001:
+                updates.append(
+                    {
+                        "csv_product_name": existing["Product Name"],
+                        "processed_name": processed,
+                        "packing_style": style,
+                        "old_price": old_float if old_float is not None else 0.0,
+                        "new_price": sgd_price,
+                    }
+                )
+            else:
+                unchanged_count += 1
+        else:
+            new_products.append(
+                {
+                    "product_name": prod["product_name"],
+                    "processed_name": processed,
+                    "packing_style": style,
+                    "packing_size": int(prod.get("packing_size", 1)),
+                    "packing_price": sgd_price,
+                }
+            )
+
+    return updates, new_products, unchanged_count
+
+
 # ── Apply changes to data7.csv ────────────────────────────────────────────────
 
 def apply_changes(
     supplier: str,
     price_updates: list[dict[str, Any]],
-    new_products: list[dict[str, Any]],   # may have user-edited packing_size
+    new_products: list[dict[str, Any]],
+    exchange_rate: float,
 ) -> tuple[int, int]:
     """
     Applies price updates and new-product inserts to data7.csv.
+
+    Price update: Packing Price → new value; old value → Previous Packing Price;
+                  Exchange Rate column updated to invoice rate.
+    New product:  inserted as a new row with all columns populated.
+
     Returns (updated_count, inserted_count).
     """
     df: pl.DataFrame = load_nml_csv()
+    rate: float = float(exchange_rate) if exchange_rate else 1.0
 
     updated_count: int = 0
 
-    # ── Price updates ──────────────────────────────────────────────────────────
     for upd in price_updates:
         csv_name: str = upd["csv_product_name"]
         new_price: float = float(upd["new_price"])
@@ -184,47 +269,46 @@ def apply_changes(
 
         if mask.sum() > 0:
             df = df.with_columns(
-                pl.when(mask)
-                .then(pl.lit(new_price))
-                .otherwise(pl.col("Packing Price"))
-                .alias("Packing Price")
+                [
+                    # Shift current price to Previous Packing Price
+                    pl.when(mask)
+                    .then(pl.col("Packing Price"))
+                    .otherwise(pl.col("Previous Packing Price"))
+                    .alias("Previous Packing Price"),
+                    # Set new price
+                    pl.when(mask)
+                    .then(pl.lit(new_price))
+                    .otherwise(pl.col("Packing Price"))
+                    .alias("Packing Price"),
+                    # Update exchange rate
+                    pl.when(mask)
+                    .then(pl.lit(rate))
+                    .otherwise(pl.col("Exchange Rate"))
+                    .alias("Exchange Rate"),
+                ]
             )
             updated_count += 1
 
-    # ── New products ───────────────────────────────────────────────────────────
     inserted_count: int = 0
 
     if new_products:
-        product_names: list[str] = [p["product_name"] for p in new_products]
-
-        split_results: list[dict[str, str]] = []
-        BATCH: int = 50
-        for start in range(0, len(product_names), BATCH):
-            batch: list[str] = product_names[start : start + BATCH]
-            try:
-                split_results.extend(split_product_names_with_groq(batch))
-            except Exception:
-                split_results.extend(
-                    [{"processed_name": n, "packing_style": ""} for n in batch]
-                )
-
-        new_rows: list[dict[str, Any]] = []
-        for i, prod in enumerate(new_products):
-            split: dict[str, str] = split_results[i] if i < len(split_results) else {}
-            new_rows.append(
-                {
-                    "Product Name": prod["product_name"],
-                    "Processed Product Name": split.get("processed_name", prod["product_name"]),
-                    "Packing Style": split.get("packing_style", ""),
-                    "Packing Size": float(prod.get("packing_size", prod.get("inferred_packing_size", 1))),
-                    "Packing Price": float(prod["packing_price"]),
-                    "Supplier": supplier,
-                }
-            )
+        new_rows: list[dict[str, Any]] = [
+            {
+                "Product Name": p["product_name"],
+                "Processed Product Name": p["processed_name"],
+                "Packing Style": p["packing_style"],
+                "Packing Size": float(p.get("packing_size", 1)),
+                "Packing Price": float(p["packing_price"]),
+                "Previous Packing Price": None,
+                "Exchange Rate": rate,
+                "Supplier": supplier,
+            }
+            for p in new_products
+        ]
 
         new_df: pl.DataFrame = pl.DataFrame(new_rows)
 
-        # Only insert rows that don't already exist (by Product Name + Supplier)
+        # Only insert rows that don't already exist (Product Name + Supplier key)
         existing_keys: pl.DataFrame = df.select(
             (
                 pl.col("Product Name").str.strip_chars().str.to_lowercase()
@@ -239,9 +323,9 @@ def apply_changes(
                 + pl.col("Supplier").fill_null("").str.strip_chars().str.to_lowercase()
             ).alias("_key")
         )
-        inserts: pl.DataFrame = (
-            new_df_keyed.join(existing_keys, on="_key", how="anti").drop("_key")
-        )
+        inserts: pl.DataFrame = new_df_keyed.join(
+            existing_keys, on="_key", how="anti"
+        ).drop("_key")
         inserted_count = inserts.height
 
         if not inserts.is_empty():
