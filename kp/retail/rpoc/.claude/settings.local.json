@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m py_compile src/rpoc/pages_/chatbot/chatbot_.py)",
+      "Bash(python *)",
+      "Bash(uv run *)"
+    ]
+  }
+}

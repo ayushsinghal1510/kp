@@ -1,0 +1,26 @@
+logger : 
+
+  color-formatter : 
+
+    color : 
+      debug : "\x1b[33m"
+      info : "\x1b[32m"
+      warning : "\x1b[38;5;208m"
+      error : "\x1b[31m"
+      critical : "\x1b[31;1m"
+      reset : "\x1b[0m"
+
+    log-formatting : '%(asctime)s - %(levelname)s - %(message)s'
+    date-formatting : '%Y-%m-%d %H:%M:%S'
+
+  rotating : 
+    type : time 
+    
+    file-name : database.log
+    when : midnight 
+    interval : 1
+    backup-count : 15
+    encoding : utf-8
+
+    log-formatting : '%(asctime)s - %(levelname)s - %(message)s'
+    date-formatting : '%Y-%m-%d %H:%M:%S'
