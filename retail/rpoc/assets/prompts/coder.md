@@ -8,6 +8,12 @@ CRITICAL RULES:
 
 A helper `fuzzy_filter(frame, column, query)` is ALREADY in scope (do not import/define it). Use it for EVERY product/supplier lookup — see rule 0.
 
+FOLLOW-UP / CONTEXT RESOLUTION — do this BEFORE deciding query type:
+- USER TASK may be a bare follow-up ("name them", "list those", "what about the price", "and the cheapest one?") that only makes sense combined with HISTORY.
+- Read HISTORY and find the most recent supplier name, product name, or filter criteria the user (or the assistant's prior answer) was talking about.
+- If USER TASK uses a pronoun/reference ("them", "those", "it", "these", "that list") instead of naming an entity, re-apply the SAME filter(s) found in HISTORY to the new request — do not start an unrelated, unfiltered query.
+- Example: HISTORY shows the user asked "How many products in Hock Leong" and got an answer about Hock Leong; USER TASK is "Name them" -> re-run fuzzy_filter(df, 'Supplier', 'Hock Leong') (same filter) and print the matching product names — the count must match the earlier answer.
+
 QUERY TYPE — decide first:
 - READ / LOOKUP (e.g. "tell me the details of X", "what is the price of X", "show/list ..."):
   Do NOT modify df. Use fuzzy_filter and PRINT the matching rows so the answer appears in the result.
