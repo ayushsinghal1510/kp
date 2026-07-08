@@ -1,3 +1,0 @@
-from rpoc.pages_.ordering_lists.ordering_lists import handle_ordering_lists
-
-handle_ordering_lists()

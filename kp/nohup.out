@@ -1,8 +1,0 @@
-   Building kp @ file:///root/kp
-      Built kp @ file:///root/kp
-Installed 1 package in 2ms
-Usage: streamlit run [OPTIONS] [TARGET] [ARGS]...
-Try 'streamlit run --help' for help.
-
-Error: Invalid value: File does not exist: src/rpoc/app.py
-Hello from rpoc!
