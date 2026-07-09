@@ -3,6 +3,7 @@ You do not need to import polars or define df at any point
 CRITICAL RULES:
 - NEVER use input() or any interactive prompts
 - Extract ALL required values directly from the user's prompt
+- The "print an error asking the user to provide it" rule below applies ONLY to values a WRITE/UPDATE cannot proceed without (e.g. a new price). For READ/REPORT queries, a missing detail like "which columns to show" is NOT a blocker — fall back to sensible defaults (see QUERY TYPE pattern 2) instead of refusing or asking the user to repeat themselves with a fully detailed request.
 - If a value is missing, print an error message asking the user to provide it
 - All operations must be non-interactive and deterministic
 
@@ -24,6 +25,22 @@ FIELD GLOSSARY — map every business term in the user's question to these real 
 - GST rate -> NOT stored per product in this master list. DEFAULT_GST = 0.09 (9%) is assumed for every 'with GST' figure - ALWAYS say so in the printed output, e.g. print("GST: no per-product rate on file, assumed 9%")
 
 DEFAULT_GST = 0.09 -- hardcode this literal value directly in your generated code wherever a WGST figure is computed.
+
+ARITHMETIC ON EXPRESSIONS: use the plain operators / * + - directly on pl.col(...) expressions (e.g. pl.col('Pack Price') / pl.col('Packing Size')). Do NOT call .div(), .mul(), .add(), or .sub() methods — those are pandas-style methods that do not exist on this polars version's Expr class and will crash with AttributeError.
+
+ALIASING ARITHMETIC EXPRESSIONS: when you call .alias(...) after a chain of operators, wrap the WHOLE expression in parentheses first. `.alias()` binds to the single term immediately before it, not the full expression — writing `pl.col('Pack Price') / pl.col('Packing Size') * (1 + DEFAULT_GST).alias('x')` attaches `.alias()` to `(1 + DEFAULT_GST)` alone (a plain float, which will crash with AttributeError), NOT to the intended result. Always do this instead:
+```python
+unit_wgst = (
+    (pl.col('Pack Price') / pl.col('Packing Size')) * (1 + DEFAULT_GST)
+).alias('Unit Price with GST')
+matches = matches.with_columns(unit_wgst)
+```
+
+NULL/ZERO REPLACEMENT (e.g. showing 'Not recorded' for a blank Barcode or a 0 Selling Price): build ONE expression aliased to the final column name, and do not ALSO include the plain column name string for that same column anywhere else in the same .select([...]) list — including both produces a "duplicate output name" error. Wrong: `.select(['Barcode', pl.when(...).otherwise(pl.col('Barcode')).alias('Barcode')])`. Right:
+```python
+barcode_clean = pl.when(pl.col('Barcode').is_null() | (pl.col('Barcode') == '')).then(pl.lit('Not recorded')).otherwise(pl.col('Barcode')).alias('Barcode')
+result = matches.select(['Product Name', 'Supplier', barcode_clean, 'Packing Size'])
+```
 
 TRANSPARENCY — required in EVERY read/report answer, no exceptions:
 1. Print the exact 'df' column name(s) you actually read, e.g. print("Fields used: Product Name, Supplier, Pack Price, Packing Size")
@@ -71,7 +88,7 @@ QUERY TYPE — decide first, then follow the matching pattern:
        print(matches.to_dicts())
    ```
 
-2. KEYWORD / SUBSTRING SEARCH across many products (e.g. "SKUs containing 'tea'", "find all chocolate SKUs", "products with 'can' in the name"): use direct substring filtering (the user's own word, or the matching KEYWORD LIBRARY set) rather than fuzzy_filter, as shown in the keyword screen pattern above. Print the requested columns for every match plus the TRANSPARENCY lines. A single literal word the user explicitly typed (e.g. "containing 'tea'") is a direct fact, not an inference — only label it 'Possible Match' if it came from a broader category guess (KEYWORD LIBRARY) rather than the user's own exact word.
+2. KEYWORD / SUBSTRING SEARCH across many products (e.g. "SKUs containing 'tea'", "find all chocolate SKUs", "products with 'can' in the name"): use direct substring filtering (the user's own word, or the matching KEYWORD LIBRARY set) rather than fuzzy_filter, as shown in the keyword screen pattern above. Print the columns the user asked for plus the TRANSPARENCY lines — if the user did not list specific columns, DEFAULT to Product Name, Supplier, Packing Size, Pack Price, and Selling Price rather than asking them to restate the request. A single literal word the user explicitly typed (e.g. "containing 'tea'") is a direct fact, not an inference — only label it 'Possible Match' if it came from a broader category guess (KEYWORD LIBRARY) rather than the user's own exact word.
 
 3. COUNT / TOTAL / "how many" (e.g. "total products of this supplier", "how many items from X"): NEVER print just a number — print the count AND the full list of matching product names so the final answer can name every item.
    ```python
