@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs ls -la)",
+      "Read(//teamspace/studios/this_studio/tep/kp/**)",
+      "Bash(python3 *)",
+      "Bash(uv run *)"
+    ]
+  }
+}
