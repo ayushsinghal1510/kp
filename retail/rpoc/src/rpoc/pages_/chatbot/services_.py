@@ -6,6 +6,8 @@ import polars as pl
 import pandas as pd
 import numpy as np
 import streamlit as st
+import markdown as md
+
 from fpdf import FPDF
 
 from io import StringIO
@@ -93,14 +95,23 @@ def execute_code(code_str : str) -> tuple[bool , str | None , str | None] :
         sys.stdout = sys.__stdout__
 
 def create_pdf(text: str) -> bytes:
-    
+
+    # Core PDF fonts only cover latin-1 - normalize common "smart" punctuation
+    # to ASCII first, then replace anything else that still falls outside
+    # latin-1, so write_html() below never sees an unsupported character.
+    clean : str = text.replace('’' , "'").replace('‘' , "'")
+    clean = clean.replace('“' , '"').replace('”' , '"')
+    clean = clean.replace('–' , '-').replace('—' , '-')
+    clean = clean.encode('latin-1' , 'replace').decode('latin-1')
+
+    html : str = md.markdown(
+        clean ,
+        extensions = ['tables' , 'fenced_code' , 'nl2br']
+    )
+
     pdf: FPDF = FPDF()
     pdf.add_page()
-    pdf.set_font("Arial", size=12)
-    
-    pdf.multi_cell(
-        0, 10,
-        txt=text.encode('latin-1', 'replace').decode('latin-1')
-    )
-    
-    return pdf.output(dest='S').encode('latin-1')
+    pdf.set_font("Helvetica", size=12)
+    pdf.write_html(html)
+
+    return bytes(pdf.output())

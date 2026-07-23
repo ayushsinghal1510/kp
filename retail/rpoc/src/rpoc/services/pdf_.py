@@ -35,7 +35,7 @@ def create_pdf(text: str) -> bytes:
         txt=text.encode('latin-1', 'replace').decode('latin-1')
     )
     
-    return pdf.output(dest='S').encode('latin-1')
+    return bytes(pdf.output())
 
 def safe_num(
     val : Any , 
@@ -707,4 +707,4 @@ def build_tmg_pdf(
         
     pdf.ln()
 
-    return pdf.output(dest = 'S').encode('latin-1')
+    return bytes(pdf.output())

@@ -1,14 +1,39 @@
 import re
 import json
+import time
 import docx2txt
 
 import pandas as pd
 import streamlit as st
 
+from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
+from re import Match
 from typing import Any
 
 from google.genai import types
+from pypdf import PdfReader , PdfWriter
+
+
+PDF_CHUNK_MAX_PAGES : int = 5
+PDF_LARGE_DOC_PAGE_THRESHOLD : int = 40
+PDF_CHUNK_MAX_PAGES_LARGE_DOC : int = 3
+
+
+def _chunk_size_for_page_count(
+    page_count : int
+) -> int :
+
+    # Very large invoices (esp. multi-month consolidated statements like TGS's
+    # 105-page file) pack noticeably more line items into each page than
+    # smaller ones do - the same page-count-based chunk size ends up asking
+    # the model to enumerate far more products per call, which measurably
+    # hurt run-to-run name consistency in testing. Shrinking the chunk further
+    # for these keeps per-call product density comparable to smaller docs.
+    if page_count > PDF_LARGE_DOC_PAGE_THRESHOLD :
+        return PDF_CHUNK_MAX_PAGES_LARGE_DOC
+
+    return PDF_CHUNK_MAX_PAGES
 
 
 def _extract_content_from_file(
@@ -103,6 +128,39 @@ def _extract_content_from_file(
     return content
 
 
+def _extract_json_object(
+    raw_text : str
+) -> dict[str , Any] :
+
+    text : str = raw_text.strip()
+
+    # The model (esp. with the googleSearch tool enabled) often narrates its
+    # reasoning/search steps as visible text before the final answer, sometimes
+    # including its own stray ``` fences along the way. The LAST ```json fenced
+    # block is reliably the final answer, so prefer that over a naive
+    # strip-from-start-and-end regex, which breaks as soon as more than one
+    # fence is present anywhere in the response.
+    fence_matches : list[Match] = list(
+        re.finditer(
+            r'```json\s*(.*?)```' ,
+            text ,
+            re.DOTALL | re.IGNORECASE
+        )
+    )
+
+    if fence_matches :
+        return json.loads(fence_matches[-1].group(1).strip())
+
+    # No fenced block at all - fall back to the outermost {...} in the text.
+    start : int = text.find('{')
+    end : int = text.rfind('}')
+
+    if start != -1 and end != -1 and end > start :
+        return json.loads(text[start : end + 1])
+
+    return json.loads(text)
+
+
 def _call_llm_with_retries(
     content : list[Any] , 
     model_client : Any , 
@@ -168,31 +226,32 @@ def _call_llm_with_retries(
 
             raw_response_text = response.text
 
-            cleaned_text : str = re.sub(
-                r'^```json\s*|```\s*$' , 
-                '' , 
-                raw_response_text.strip() , 
-                flags = re.MULTILINE | re.IGNORECASE
-            )
-
-            data = json.loads(cleaned_text)
+            data = _extract_json_object(raw_response_text)
 
             return data
 
-        except Exception as e : 
-            
+        except Exception as e :
+
             st.warning(f'JSON parsing failed on attempt {attempt + 1}/{max_retries} : {e}')
-            
-            with st.expander('View Raw LLM Output (Dev Mode)') : 
-                
+
+            with st.expander('View Raw LLM Output (Dev Mode)') :
+
                 st.code(
-                    raw_response_text , 
+                    raw_response_text ,
                     language = 'json'
                 )
 
-            if attempt == max_retries - 1 : 
-                
+            if attempt == max_retries - 1 :
+
                 st.error('Max retries reached. Failed to parse valid JSON from LLM.')
+
+            else :
+
+                # Chunked PDF extraction fires several of these concurrently
+                # (see PDF_CHUNK_MAX_PAGES / ThreadPoolExecutor below), which can
+                # trip transient rate limits - back off before retrying instead
+                # of immediately re-hitting the same limit.
+                time.sleep(2 ** attempt)
 
     return {}
 
@@ -310,25 +369,156 @@ def _process_and_deduplicate_products(
     return processed_items
 
 
-def process_document_with_llm(
-    uploaded_file : Any , 
-    prompt : str , 
-    model_client : Any
-) -> list[dict[str , Any]] : 
+def _split_pdf_into_page_chunks(
+    file_bytes : bytes ,
+    max_pages_per_chunk : int
+) -> list[bytes] :
 
-    try : 
+    reader : PdfReader = PdfReader(BytesIO(file_bytes))
+    total_pages : int = len(reader.pages)
+
+    chunks : list[bytes] = []
+
+    for start in range(0 , total_pages , max_pages_per_chunk) :
+
+        writer : PdfWriter = PdfWriter()
+
+        for page_index in range(start , min(start + max_pages_per_chunk , total_pages)) :
+            writer.add_page(reader.pages[page_index])
+
+        buffer : BytesIO = BytesIO()
+        writer.write(buffer)
+
+        chunks.append(buffer.getvalue())
+
+    return chunks
+
+
+def _call_llm_for_pdf_chunk(
+    chunk_bytes : bytes ,
+    mime_type : str ,
+    prompt : str ,
+    model_client : Any
+) -> dict[str , Any] :
+
+    content : list[Any] = [
+        prompt ,
+        {
+            'mime_type' : mime_type ,
+            'data' : chunk_bytes
+        }
+    ]
+
+    parsed : dict[str , Any] = _call_llm_with_retries(
+        content ,
+        model_client
+    )
+
+    # A chunk can come back with valid-but-empty JSON (no exception raised, the
+    # model just found nothing) - this is distinct from a JSON parse failure,
+    # which _call_llm_with_retries already retries on its own. One extra retry
+    # here catches that case before we accept "0 products" for a chunk that
+    # visibly has page content.
+    if parsed and not parsed.get('products') :
+
+        parsed = _call_llm_with_retries(
+            content ,
+            model_client
+        )
+
+    return parsed
+
+
+def _extract_pdf_in_chunks(
+    file_bytes : bytes ,
+    mime_type : str ,
+    prompt : str ,
+    model_client : Any ,
+    max_pages_per_chunk : int = PDF_CHUNK_MAX_PAGES
+) -> dict[str , Any] :
+
+    chunks : list[bytes] = _split_pdf_into_page_chunks(
+        file_bytes ,
+        max_pages_per_chunk
+    )
+
+    all_products : list[dict[str , Any]] = []
+    supplier : str | None = None
+    exchange_rate : float | None = None
+
+    with ThreadPoolExecutor(max_workers = 4) as executor :
+
+        for parsed in executor.map(
+            lambda chunk : _call_llm_for_pdf_chunk(
+                chunk ,
+                mime_type ,
+                prompt ,
+                model_client
+            ) ,
+            chunks
+        ) :
+
+            if not parsed :
+                continue
+
+            if not supplier and parsed.get('supplier') :
+                supplier = parsed['supplier']
+
+            if not exchange_rate and parsed.get('exchange_rate') :
+                exchange_rate = parsed['exchange_rate']
+
+            all_products.extend(
+                parsed.get('products' , [])
+            )
+
+    return {
+        'supplier' : supplier or 'Unknown' ,
+        'exchange_rate' : exchange_rate or 1.0 ,
+        'products' : all_products
+    }
+
+
+def process_document_with_llm(
+    uploaded_file : Any ,
+    prompt : str ,
+    model_client : Any
+) -> list[dict[str , Any]] :
+
+    try :
+
+        file_name : str = uploaded_file.name.lower()
+
+        if file_name.endswith('.pdf') :
+
+            file_bytes : bytes = uploaded_file.getvalue()
+            page_count : int = len(PdfReader(BytesIO(file_bytes)).pages)
+
+            if page_count > PDF_CHUNK_MAX_PAGES :
+
+                chunked_data : dict[str , Any] = _extract_pdf_in_chunks(
+                    file_bytes ,
+                    uploaded_file.type ,
+                    prompt ,
+                    model_client ,
+                    _chunk_size_for_page_count(page_count)
+                )
+
+                if not chunked_data.get('products') :
+                    return []
+
+                return _process_and_deduplicate_products(chunked_data)
 
         content : list[Any] = _extract_content_from_file(
-            uploaded_file , 
+            uploaded_file ,
             prompt
         )
 
         parsed_data : dict[str , Any] = _call_llm_with_retries(
-            content , 
+            content ,
             model_client
         )
 
-        if not parsed_data : 
+        if not parsed_data :
             return []
 
         processed_items : list[dict[str , Any]] = _process_and_deduplicate_products(
@@ -337,7 +527,7 @@ def process_document_with_llm(
 
         return processed_items
 
-    except Exception as e : 
+    except Exception as e :
 
         st.error(f'Document processing pipeline failed : {e}')
 

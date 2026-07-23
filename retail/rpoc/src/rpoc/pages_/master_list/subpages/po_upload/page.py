@@ -15,40 +15,82 @@ def handle_po_upload_section(
     col : Any
 ) -> None : 
 
-    with col : 
-        
+    with col :
+
         st.subheader('Upload Purchase Order')
-        
+
+        mode : str = st.radio(
+            'PO Upload Mode' ,
+            [
+                'Upload New Invoice' ,
+                'Update Existing Invoice'
+            ] ,
+            horizontal = True ,
+            key = 'po_upload_mode'
+        )
+
+        selected_supplier : str | None = None
+
+        if mode == 'Update Existing Invoice' :
+
+            supplier_options : list[str] = sorted(
+                s for s in st.session_state.df.drop_nulls(
+                    subset = ['Supplier']
+                )['Supplier'].unique().to_list()
+                if isinstance(s , str) and s.strip()
+            )
+
+            if not supplier_options :
+
+                st.info('No suppliers found in the master list yet. Use "Upload New Invoice" instead.')
+
+            else :
+
+                selected_supplier = st.selectbox(
+                    'Supplier' ,
+                    supplier_options ,
+                    key = 'po_upload_supplier'
+                )
+
         po_files : list[Any] | None = st.file_uploader(
-            'Upload Purchase Order (LLM)' , 
-            accept_multiple_files = True , 
+            'Upload Purchase Order (LLM)' ,
+            accept_multiple_files = True ,
             key = 'po_upload'
         )
 
-        if st.button('Extract PO with LLM') and po_files : 
-            
+        extract_clicked : bool = st.button('Extract PO with LLM')
+
+        if extract_clicked and mode == 'Update Existing Invoice' and not selected_supplier :
+
+            st.warning('Select a supplier first.')
+
+        elif extract_clicked and po_files :
+
             all_new_data : list[dict[str , Any]] = []
             total_files : int = len(po_files)
-            
+
             progress_bar : Any = st.progress(
-                0 , 
+                0 ,
                 text = 'Starting PO processing...'
             )
-            
-            for idx , file in enumerate(po_files) : 
-                
+
+            for idx , file in enumerate(po_files) :
+
                 save_uploaded_file(file)
 
                 extracted_data : list[dict[str , Any]] = process_document_with_llm(
-                    file , 
-                    st.session_state.prompts['ingestion'] , 
+                    file ,
+                    st.session_state.prompts['ingestion'] ,
                     st.session_state.gemini_client
                 )
-                
-                for row in extracted_data : 
-                    
+
+                for row in extracted_data :
+
                     row['Filename'] = file.name
-                    
+
+                    if mode == 'Update Existing Invoice' and selected_supplier :
+                        row['Supplier'] = selected_supplier
+
                 all_new_data.extend(extracted_data)
                 
                 current_step : int = idx + 1

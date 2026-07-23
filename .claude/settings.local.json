@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip show *)",
+      "Bash(uv remove *)",
+      "Bash(uv add *)",
+      "Bash(uv pip *)",
+      "Bash(jobs -l)",
+      "Bash(grep -n '```' /tmp/claude-1000/-teamspace-studios-this-studio-kp-retail-rpoc/6011e77f-f6db-41a2-a263-5e5752e0421a/scratchpad/bhavna_raw_response.txt)",
+      "Bash(grep -c '```' /tmp/claude-1000/-teamspace-studios-this-studio-kp-retail-rpoc/6011e77f-f6db-41a2-a263-5e5752e0421a/scratchpad/bhavna_raw_response.txt)",
+      "Bash(grep -v \"ScriptRunContext\\\\|Warning:\\\\|streamlit run\\\\|^$\")",
+      "Bash(awk '{print $5, $NF}')",
+      "Bash(disown)",
+      "Bash(echo \"launched pid $!\")",
+      "Bash(kill 158178)",
+      "Bash(pkill -f consistency_check.py)",
+      "Bash(mkdir -p /teamspace/studios/this_studio/kp_scratch/consistency_check)",
+      "Read(//teamspace/studios/this_studio/**)",
+      "Bash(timeout 100 uv run python -c ' *)",
+      "Bash(echo \"started pid $!\")",
+      "Bash(kill 167062)",
+      "Bash(pkill -f wembs_retest2)",
+      "Bash(kill %1)",
+      "Bash(wait)",
+      "Bash(wait 53266)",
+      "Bash(kill -0 69121)",
+      "Bash(kill -0 123151)",
+      "Bash(nohup uv run python /teamspace/studios/this_studio/kp_scratch/verify_vs_master.py \"LIVERPOOL .pdf\")",
+      "Bash(echo \"started $!\")"
+    ]
+  }
+}
