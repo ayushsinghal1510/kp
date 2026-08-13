@@ -26,7 +26,12 @@
       "Bash(kill -0 69121)",
       "Bash(kill -0 123151)",
       "Bash(nohup uv run python /teamspace/studios/this_studio/kp_scratch/verify_vs_master.py \"LIVERPOOL .pdf\")",
-      "Bash(echo \"started $!\")"
+      "Bash(echo \"started $!\")",
+      "Bash(python3 -c ' *)",
+      "Bash(.venv/bin/python -c \"import polars,streamlit,pandas;print\\('polars',polars.__version__\\);print\\('streamlit',streamlit.__version__\\);print\\('pandas',pandas.__version__\\)\")",
+      "Bash(../../.venv/bin/python *)",
+      "Bash(.venv/bin/python -m pip install pymupdf)",
+      "Bash(uv run --no-project --with pymupdf python -c ' *)"
     ]
   }
 }

@@ -15,7 +15,13 @@ Extract product pricing information from the attached file with absolute precisi
    * **SEPARATE "PACKING" COLUMN — SUPPLIER-SPECIFIC, CHECK WHICH CONVENTION APPLIES:** Several suppliers print `DESCRIPTION` and `PACKING`/`CARTON PACKING` as two DIFFERENT table columns (the dimension/carton notation is a distinct column next to Description, not glued into the same cell — e.g. Description cell says "COKE", separate Packing column says "12X1.25LT"). Whether the Packing-column text belongs in `Product Name` depends on the SPECIFIC SUPPLIER, verified against the master list — there is NO single universal rule here, and suppliers with this same two-column layout do NOT all behave the same way:
      * **TGS GROUP SDN BHD** invoices (columns: `ITEM QTY | DESCRIPTION | ITEM CODE | PACKING | WEIGHT | U.PRICE | AMOUNT`): APPEND — `Product Name` = Description + " " + Packing. E.g. Description "COKE" + Packing "12X1.25LT" -> `"COKE 12X1.25LT"`; Description "MAGGI HOT CUP (C)" + Packing "54X57G" -> `"MAGGI HOT CUP (C) 54X57G"`.
      * **Sheng Sheng F&B Industries** invoices (`PACKING` column printed BEFORE `DESCRIPTION`): PREPEND — `Product Name` = Packing + " " + Description. E.g. Packing "24X310ML" + Description "ICE COOL YOUNG COCONUT WITH PULP" -> `"24X310ML ICE COOL YOUNG COCONUT WITH PULP"`.
-     * **Liverpool International, Sun Lim Garden Foodstuffs, Winstar Marketing** invoices (and any other supplier not listed above with a separate Packing/Carton Packing column): DROP IT — `Product Name` = the Description-cell text only, verbatim, do NOT append or prepend the Packing-column text. E.g. Description "Doritos Nacho Cheese 75g" with separate Packing column "75g X 64" -> `Product Name` = `"Doritos Nacho Cheese 75g"` (Packing column ignored).
+     * **SY FOODSTUFFS & TRADING PTE LTD** invoices (columns: `No. | Code | Item | Description | <unnamed packing column> | Qty | Price | Amount S$`): APPEND — `Product Name` = Description + " " + Packing. ⚠ This supplier's packing column has **no printed header** — it is the unlabelled column sitting between `Description` and `Qty`, holding values like "24 X 500ML" / "24 X 300ML" / "12 X 1.5L". Treat it as a packing column anyway. E.g. Description "100 PLUS ZERO" + Packing "24 X 500ML" -> `"100 PLUS ZERO 24 X 500ML"`; Description "POKKA GREEN TEA (LESS)" + Packing "24 X 500ML" -> `"POKKA GREEN TEA (LESS) 24 X 500ML"`. **Verified pitfall:** the master list contains one row stored as `"100 PLUS 500ML"` with the packing NOT appended — that row is the mistake; every other SY row appends. Always append for this supplier.
+     * **WEMBS MARKETING SDN. BHD.** invoices (single `DESCRIPTION` header spanning two visually separated groups, with NO vertical rule between them — the base name on the left, the dimension on the right, then `QUANTITY Cartons | UNIT PRICE RM | AMOUNT RM`): APPEND — `Product Name` = left group + " " + right group. E.g. "Twisties Cheeky Cheddar Cheese 140g" + "18 x 140g" -> `"Twisties Cheeky Cheddar Cheese 140g 18 x 140g"`; "Halls xs Blueberry" + "24 x (12 x 20's)" -> `"Halls xs Blueberry 24 x (12 x 20's)"`. Because the two groups share one header, treat them as ONE Description cell and keep both halves.
+     * **Liverpool International, Sun Lim Garden Foodstuffs, Winstar Marketing, Bio Clean Supply Sdn Bhd** invoices (and any other supplier not listed above with a separate Packing/Carton Packing/Pack UOM column): DROP IT — `Product Name` = the Description-cell text only, verbatim, do NOT append or prepend the Packing-column text. E.g. Description "Doritos Nacho Cheese 75g" with separate Packing column "75g X 64" -> `Product Name` = `"Doritos Nacho Cheese 75g"` (Packing column ignored). For **Bio Clean** specifically the dropped column is `Pack UOM` (values like "75 bag", "20 ctn", "50 ctn"); its real packing multiplier is already printed INSIDE the Description cell, e.g. `"Sure Clean Sabun Cuci Berkualiti 5kg Lemon 1*3"` -> keep exactly that, ignore the "75 bag".
+     * **NO SEPARATE PACKING COLUMN — JB Yap Brothers Food, Meng Chong Foodstuffs, Biscotti Trading:** these suppliers have NO packing column at all (e.g. JB Yap: `ITEM | QTY | DESCRIPTION | U.PRICE | DIS % | AMOUNT`; Meng Chong: `PRODUCT CODE | DESCRIPTION | QUANTITY | UNIT PRICE | AMOUNT`). The packing notation is printed INSIDE the Description cell and its POSITION VARIES line to line — leading, middle, or trailing. Copy the Description cell verbatim and do NOT move, reorder, or normalize the packing notation to a standard position.
+       * JB Yap (position varies within one invoice): `"FIZZY Kola 120g*48"` (trailing) and `"120g*48 FRUIT PLUS Apple"` (leading) appear on the SAME invoice — keep each exactly as printed.
+       * Meng Chong (consistently leading): `"60GX5PX6B SILVER BAG MAMA SHRIMP TOM YUM NOODLES"`.
+       * Biscotti (consistently leading): `"100GM X 12PCKS BISCUIT CHEESE CRACKER"`, `"240GM10X24PCKS COLADA BISCORNIVAL NAIYU"`.
      * If the supplier is not one of the ones named above and you cannot tell which convention applies, default to Description-cell text only (do not invent a concatenation).
 2. **STRICT DATA INTEGRITY:** Only extract data that is visually present unless a specific calculation is requested below. Do NOT invent or assume values.
 
@@ -382,17 +388,9 @@ When a supplier match is found in this section, these rules take precedence in t
 3. FOC adjustment (Section 2)
 4. General Pack Price formula (Section 2)
 
----
-
-#### Open Questions (flagged, not yet resolved — do not silently guess)
-
-* Is `SY FOODSTUFF` the same legal entity as `SY FOODS`? They currently have separate, inconsistent
-  rule entries.
-* Should `TONG GARDEN` in Table 4.1 be the short form, or the full legal name
-  `TONG GARDEN FOOD (SINGAPORE) PTE LTD` that Rule 3's "Supplier Name Resolution" would otherwise
-  produce via Google Search?
-* Should `price_requires_manual_review` (4.5) be added to the OUTPUT FORMAT schema and read by
-  `po_upload/services_.py`, or dropped from the prompt since it currently has no effect?
+#### Speicifc product names 
+* THere is a product as `F&N` extract it as `F&N` only not `FN`
+* For tong garden supplier, the packing size of the product is full like (1 CTN x 10DP x 12 Pkts.) without a space
 
 ### OUTPUT FORMAT (JSON ONLY)
 
