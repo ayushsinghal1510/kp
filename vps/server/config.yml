@@ -12,13 +12,13 @@ logger :
 add-scenario : 
   prompt-path : assets/prompts/scenario-creation.md
   model : gemini-2.5-flash
-  database-name : your_database
-  collection-name : scen
+  database-name : test
+  collection-name : scenarios
   workflow-path : assets/jsons/default-scenario.json
 
 edit-scenario : 
   prompt-path : assets/prompts/scenario-editing.md
   model : gemini-2.5-flash
-  database-name : your_database
-  collection-name : scen
+  database-name : test
+  collection-name : scenarios
   workflow-path : assets/jsons/default-scenario.json

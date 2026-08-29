@@ -7,6 +7,8 @@ from bson.objectid import ObjectId
 
 from .loader import load_clients
 
+from .routers import get_results_route
+
 from .state import AppState
 
 from jwcrypto.jwe import JWE
@@ -14,7 +16,7 @@ from jwcrypto.jwk import JWK
 
 from fastapi.middleware.cors import CORSMiddleware
 
-from fastapi import FastAPI, Header, Request
+from fastapi import FastAPI, Header, HTTPException, Request
 from services import env_str_to_bool , env_str_to_list
 
 from dotenv import load_dotenv
@@ -27,15 +29,18 @@ state = AppState()
 async def lifespan(app : FastAPI) : 
 
     (
-        config , 
-        logger , 
-        students_collection , 
-        scenarios_collection , 
+        config ,
+        logger ,
+        gemini_client ,
+        students_collection ,
+        scenarios_collection ,
         sessions_collection
     ) = load_clients()
 
-    state.config = config 
+    state.config = config
     state.logger = logger
+
+    state.gemini_client = gemini_client
 
     state.students_collection = students_collection
     state.scenarios_collection = scenarios_collection 
@@ -94,9 +99,11 @@ def process_new_session(token : str = Header(... , alias = 'token')) :
             'transcription' : transcription , 
             'feedback' : feedback , 
             'score' : score , 
-            'student_id' : payload['student_id'] , 
-            'scenario_id' : payload['scenario_id'] , 
-            # ! Add created and updated at here 
+            'student_id' : payload['student_id'] ,
+            'scenario_id' : payload['scenario_id'] ,
+            # * Stored so /get-results can find this doc again by the chat platform's session id
+            'session_id' : payload['session_id'] ,
+            # ! Add created and updated at here
         }
 
         session_result = state.sessions_collection.insert_one(session_doc)
@@ -122,11 +129,36 @@ def process_new_session(token : str = Header(... , alias = 'token')) :
         }
 
     return {
-        'status' : 'error' , 
+        'status' : 'error' ,
         'message' : 'Not able to find session logs'
     }
 
-def main() : 
+@app.post('/get-results')
+async def get_results(request : Request) -> dict :
+
+    data : dict = await request.json()
+
+    required : list = ['scenario_id' , 'transcription' , 'session_id' , 'user_id']
+    missing : list = [field for field in required if field not in data]
+
+    if missing : raise HTTPException(
+        status_code = 400 ,
+        detail = f"Missing {' , '.join(repr(field) for field in missing)} in request body."
+    )
+
+    return await get_results_route(
+        scenario_id = data['scenario_id'] ,
+        transcription = data['transcription'] ,
+        session_id = data['session_id'] ,
+        user_id = data['user_id'] ,
+        scenarios_collection = state.scenarios_collection ,
+        sessions_collection = state.sessions_collection ,
+        gemini_client = state.gemini_client ,
+        config = state.config['get-results'] ,
+        logger = state.logger
+    )
+
+def main() :
 
     uvicorn.run(
         app , 
