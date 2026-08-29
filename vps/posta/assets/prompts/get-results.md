@@ -38,8 +38,15 @@ Anchor the number rather than drifting to the middle: `0-39` the student missed 
 partial history with significant gaps, `60-79` a sound consultation with omissions, `80-100` a
 thorough consultation that identified the condition and its limitations.
 
-If the transcription is empty, trivially short, or contains no actual clinical consultation, return
-a `score` of `0` and say so plainly in the feedback. Do not invent a performance that did not happen.
+Reserve a `score` of exactly `0` for the case where **no consultation took place at all** — an empty
+transcription, or an exchange with no clinical content whatsoever. Say so plainly in the feedback and
+do not invent a performance that did not happen.
+
+A consultation that genuinely happened but went badly is **not** a `0`. Score it in the `1-39` band
+and grade within that band: a student who took a token history before jumping to a conclusion has
+done more than one who dismissed the patient outright. Being brief is not itself a zero — judge what
+was actually attempted. This distinction matters, so do not collapse a poor consultation into the
+same score as a missing one.
 
 **Feedback:**
 
@@ -61,6 +68,6 @@ matching exactly this structure:
 }
 ```
 
-Use double quotes for the JSON keys and the outer string delimiters. Inside the
-`overall_feedback` string use single quotes only — never an unescaped double quote, and never a
-literal newline.
+Use double quotes for the JSON keys and the outer string delimiters. Inside the `overall_feedback`
+string use single quotes only, never an unescaped double quote. Paragraph breaks are fine as long as
+they are escaped as `\n` so the object stays valid JSON.
