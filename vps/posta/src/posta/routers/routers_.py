@@ -14,14 +14,27 @@ from fastapi import HTTPException
 from ..llm import run_json_gemini
 from ..services import create_generation_config , json_to_google_chat
 
-def _to_object_id(value : str , field : str) -> ObjectId :
+# * Fields a short scenario code may be stored under. `scenarioCode` is what posta writes ,
+# * `ScenarioId` is the name the frontend / Bubble export uses.
+SCENARIO_CODE_FIELDS : tuple = ('scenarioCode' , 'ScenarioId' , 'scenarioId' , 'scenario_code')
 
-    try : return ObjectId(value)
+def _find_scenario(scenarios_collection : Any , scenario_id : str) -> dict | None :
+    '''
+    Resolves a scenario by Mongo `_id` **or** by short code.
 
-    except (InvalidId , TypeError) : raise HTTPException(
-        status_code = 400 ,
-        detail = f"'{field}' is not a valid id : {value!r}"
-    )
+    # * The frontend sends a short code such as '9C2F7X' rather than an ObjectId , so an id that
+    # * is not a valid ObjectId is not an error — it is looked up against the code fields instead.
+    '''
+
+    try : scenario = scenarios_collection.find_one({'_id' : ObjectId(scenario_id)})
+
+    except (InvalidId , TypeError) : scenario = None
+
+    if scenario is not None : return scenario
+
+    return scenarios_collection.find_one({
+        '$or' : [{field : scenario_id} for field in SCENARIO_CODE_FIELDS]
+    })
 
 def _transcription_to_text(transcription : Any) -> str :
     '''
@@ -117,9 +130,7 @@ async def get_results_route(
     logger : Logger
 ) -> dict :
 
-    scenario_object_id : ObjectId = _to_object_id(scenario_id , 'scenario_id')
-
-    scenario : dict | None = scenarios_collection.find_one({'_id' : scenario_object_id})
+    scenario : dict | None = _find_scenario(scenarios_collection , scenario_id)
 
     if scenario is None : raise HTTPException(
         status_code = 404 ,

@@ -37,9 +37,19 @@ Response :
 }
 ```
 
-`scenario_id` must be the Mongo `ObjectId` of a doc in the scenarios collection (see `config.yml` →
-`mongo`) that has a `scenario_prompt`. The scenario's `movements` , `difficulty_status` and
-`questions_for_feedback` are used as the marking rubric.
+`scenario_id` accepts **either** the Mongo `ObjectId` of a scenario doc **or** a short scenario code
+such as `9C2F7X` — the frontend sends the latter. `_id` is tried first , then the code fields
+`scenarioCode` / `ScenarioId` / `scenarioId` / `scenario_code`.
+
+The scenario's prompt , movements , difficulty and feedback questions form the marking rubric. Both
+schemas present in the collection are read , camelCase first :
+
+| Rubric | Live (Node app) | `vps/server` |
+| --- | --- | --- |
+| prompt | `scenarioPrompt` | `scenario_prompt` |
+| questions | `aiQuestions` (newline-separated string) | `questions_for_feedback` (list) |
+| difficulty | `difficulty` | `difficulty_status` |
+| movements | `animationTriggers` | `movements` |
 
 `transcription` accepts **either** a plain string **or** a conversation-history list of
 `{'role' , 'content'}` objects — the shape `chat.voxio.in` returns in
@@ -53,9 +63,9 @@ written onto the session doc matching `session_id`.
 | Code | Meaning |
 | --- | --- |
 | `200` | Assessed. A `score` of `0` with an explanatory message means no consultation was recorded |
-| `400` | A required field is missing , or `scenario_id` is not a valid ObjectId |
-| `404` | No scenario with that `scenario_id` |
-| `422` | The scenario exists but has no `scenario_prompt` to assess against |
+| `400` | A required field is missing from the body |
+| `404` | No scenario matched that `scenario_id` , by either `_id` or scenario code |
+| `422` | The scenario exists but has no prompt to assess against |
 
 ### curl — conversation-history transcript
 
