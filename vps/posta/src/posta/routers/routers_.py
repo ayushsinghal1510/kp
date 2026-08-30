@@ -53,6 +53,50 @@ def _transcription_to_text(transcription : Any) -> str :
 
     return str(transcription).strip()
 
+def _first_present(doc : dict , *names : str) -> Any :
+    '''Returns the first of `names` present and non-empty on `doc`.'''
+
+    for name in names :
+
+        value = doc.get(name)
+
+        if value : return value
+
+    return None
+
+def _to_question_list(value : Any) -> list :
+    '''
+    `aiQuestions` is stored as one newline-separated string , while `questions_for_feedback`
+    is a list. Normalise either into a list of questions.
+    '''
+
+    if not value : return []
+
+    if isinstance(value , str) : return [line.strip() for line in value.splitlines() if line.strip()]
+
+    if isinstance(value , list) : return [str(item).strip() for item in value if str(item).strip()]
+
+    return [str(value)]
+
+def _extract_scenario(scenario : dict) -> dict :
+    '''
+    Reads a scenario doc into the rubric fields the assessor prompt needs.
+
+    # ! Two schemas exist for this collection. The live docs are camelCase and owned by the
+    # ! Node app (`scenarioPrompt` , `aiQuestions` , `difficulty` , `animationTriggers`) , while
+    # ! `vps/server` writes snake_case (`scenario_prompt` , `questions_for_feedback` ,
+    # ! `difficulty_status` , `movements`). Both are accepted , camelCase first.
+    '''
+
+    return {
+        'scenario_prompt' : _first_present(scenario , 'scenarioPrompt' , 'scenario_prompt') or '' ,
+        'movements' : _first_present(scenario , 'animationTriggers' , 'movements') or {} ,
+        'difficulty' : _first_present(scenario , 'difficulty' , 'difficulty_status') or '' ,
+        'questions_for_feedback' : _to_question_list(
+            _first_present(scenario , 'aiQuestions' , 'questions_for_feedback')
+        )
+    }
+
 def _coerce_score(value : Any) -> int :
     '''Clamps whatever the model returned into a 0-100 integer.'''
 
@@ -82,11 +126,11 @@ async def get_results_route(
         detail = f'No scenario found with scenario_id : {scenario_id}'
     )
 
-    scenario_prompt : str = scenario.get('scenario_prompt' , '')
+    rubric : dict = _extract_scenario(scenario)
 
-    if not scenario_prompt : raise HTTPException(
+    if not rubric['scenario_prompt'] : raise HTTPException(
         status_code = 422 ,
-        detail = f'Scenario {scenario_id} has no scenario_prompt to assess against.'
+        detail = f'Scenario {scenario_id} has no scenarioPrompt to assess against.'
     )
 
     transcription_text : str = _transcription_to_text(transcription)
@@ -107,10 +151,7 @@ async def get_results_route(
     generation_config : GenerateContentConfig = await create_generation_config(system_prompt)
 
     query : str = json.dumps({
-        'scenario_prompt' : scenario_prompt ,
-        'movements' : scenario.get('movements' , {}) ,
-        'difficulty' : scenario.get('difficulty_status' , '') ,
-        'questions_for_feedback' : scenario.get('questions_for_feedback' , []) ,
+        **rubric ,
         'transcription' : transcription_text
     } , default = str)
 
