@@ -23,7 +23,7 @@ Your job is to produce a single numeric score and a single block of overall feed
 
 **Scoring:**
 
-Return an integer `score` from **0 to 100**, judged on:
+Return a `score` from **0 to 10**, to **one decimal place** (e.g. `9.5`, `6.0`, `4.2`), judged on:
 
 - **History taking** — did the student elicit the presenting complaint, its onset, aggravating and
   relieving factors, and relevant life context?
@@ -34,17 +34,19 @@ Return an integer `score` from **0 to 100**, judged on:
 - **Communication** — was the student clear, empathetic, and appropriate with the patient?
 - **Rubric coverage** — how well the consultation answers each of the `questions_for_feedback`.
 
-Anchor the number rather than drifting to the middle: `0-39` the student missed the case, `40-59`
-partial history with significant gaps, `60-79` a sound consultation with omissions, `80-100` a
+Anchor the number rather than drifting to the middle: `0-3.9` the student missed the case, `4.0-5.9`
+partial history with significant gaps, `6.0-7.9` a sound consultation with omissions, `8.0-10` a
 thorough consultation that identified the condition and its limitations.
+
+The scale is out of **10**, not 100. Do not return `95` when you mean `9.5`.
 
 Reserve a `score` of exactly `0` for the case where **no consultation took place at all** — an empty
 transcription, or an exchange with no clinical content whatsoever. Say so plainly in the feedback and
 do not invent a performance that did not happen.
 
-A consultation that genuinely happened but went badly is **not** a `0`. Score it in the `1-39` band
-and grade within that band: a student who took a token history before jumping to a conclusion has
-done more than one who dismissed the patient outright. Being brief is not itself a zero — judge what
+A consultation that genuinely happened but went badly is **not** a `0`. Score it in the `0.1-3.9`
+band and grade within that band: a student who took a token history before jumping to a conclusion
+has done more than one who dismissed the patient outright. Being brief is not itself a zero — judge what
 was actually attempted. This distinction matters, so do not collapse a poor consultation into the
 same score as a missing one.
 
@@ -63,7 +65,7 @@ matching exactly this structure:
 
 ```json
 {
-    "score": 0,
+    "score": 0.0,
     "overall_feedback": ""
 }
 ```

@@ -32,7 +32,7 @@ Response :
 
 ```json
 {
-  "score": 74,
+  "score": 7.4,
   "overall_feedback": "You opened well by establishing the duration ..."
 }
 ```
@@ -62,7 +62,7 @@ written onto the session doc matching `session_id`.
 
 | Code | Meaning |
 | --- | --- |
-| `200` | Assessed. A `score` of `0` with an explanatory message means no consultation was recorded |
+| `200` | Assessed. A `score` of `0.0` with an explanatory message means no consultation was recorded |
 | `400` | A required field is missing from the body |
 | `404` | No scenario matched that `scenario_id` , by either `_id` or scenario code |
 | `422` | The scenario exists but has no prompt to assess against |
@@ -122,10 +122,10 @@ curl -i -s -X POST http://localhost:8000/get-results \
   -H 'Content-Type: application/json' \
   -d '{"scenario_id" : "000000000000000000000abc"}'
 
-# * 400 — scenario_id is not an ObjectId
+# * 404 — neither a known ObjectId nor a known scenario code
 curl -i -s -X POST http://localhost:8000/get-results \
   -H 'Content-Type: application/json' \
-  -d '{"scenario_id":"not-an-oid","session_id":"s","user_id":"u","transcription":"x"}'
+  -d '{"scenario_id":"ZZZZZZ","session_id":"s","user_id":"u","transcription":"x"}'
 
 # * 404 — no such scenario
 curl -i -s -X POST http://localhost:8000/get-results \
@@ -135,16 +135,14 @@ curl -i -s -X POST http://localhost:8000/get-results \
 
 ### Deployed host
 
-Swap the host for the deployed instance , keeping the path the same :
+Swap the host for the deployed instance , keeping the path and port the same — `uvicorn` binds
+`8000` in `main()` and nothing remaps it :
 
 ```bash
-curl -s -X POST http://34.226.139.184:7860/get-results \
+curl -s -X POST http://64.227.110.183:8000/get-results \
   -H 'Content-Type: application/json' \
   -d @payload.json | python -m json.tool
 ```
-
-# ! `uvicorn` binds port 8000 in `main()` , so if that host serves posta on 7860 the mapping is done
-# ! outside the app (reverse proxy or container port publish) — check before assuming the port.
 
 ## `POST /session`
 

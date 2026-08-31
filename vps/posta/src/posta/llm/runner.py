@@ -8,7 +8,7 @@ from google.genai.types import GenerateContentConfig
 # * Returned when the model cannot be reached or will not produce parseable JSON.
 # * Kept as a module constant so callers can identify a fallback by its score / message.
 FALLBACK_RESULT : dict = {
-    'score' : 0 ,
+    'score' : 0.0 ,
     'overall_feedback' : 'Sorry we were having some issues generating your feedback. Please try again later.'
 }
 

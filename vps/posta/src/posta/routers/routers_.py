@@ -110,13 +110,21 @@ def _extract_scenario(scenario : dict) -> dict :
         )
     }
 
-def _coerce_score(value : Any) -> int :
-    '''Clamps whatever the model returned into a 0-100 integer.'''
+def _coerce_score(value : Any) -> float :
+    '''
+    Clamps whatever the model returned into a 0-10 score with one decimal place.
 
-    try : score : int = int(float(value))
-    except (TypeError , ValueError) : return 0
+    # * A clearly out-of-100 value is rescaled , since the model occasionally reverts to the
+    # * more familiar 100-point scale despite the prompt. The threshold sits above 10 so a
+    # * small overshoot such as 10.4 clamps to 10 rather than being rescaled to 1.
+    '''
 
-    return max(0 , min(100 , score))
+    try : score : float = float(value)
+    except (TypeError , ValueError) : return 0.0
+
+    if score > 11 : score = score / 10
+
+    return round(max(0.0 , min(10.0 , score)) , 1)
 
 async def get_results_route(
     scenario_id : str ,
@@ -152,7 +160,7 @@ async def get_results_route(
         logger.warning(f'Empty transcription for session_id : {session_id} , scoring 0.')
 
         return {
-            'score' : 0 ,
+            'score' : 0.0 ,
             'overall_feedback' : 'No consultation was recorded for this session , so there is nothing to assess.'
         }
 
