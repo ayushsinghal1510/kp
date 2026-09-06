@@ -138,12 +138,18 @@ async def get_results_route(
     logger : Logger
 ) -> dict :
 
+    logger.info(f'get-results : scenario_id = {scenario_id!r} , session_id = {session_id!r} , user_id = {user_id!r}')
+
     scenario : dict | None = _find_scenario(scenarios_collection , scenario_id)
 
-    if scenario is None : raise HTTPException(
-        status_code = 404 ,
-        detail = f'No scenario found with scenario_id : {scenario_id}'
-    )
+    if scenario is None :
+
+        logger.warning(f'No scenario matched _id or {SCENARIO_CODE_FIELDS} for scenario_id : {scenario_id!r}')
+
+        raise HTTPException(
+            status_code = 404 ,
+            detail = f'No scenario found with scenario_id : {scenario_id}'
+        )
 
     rubric : dict = _extract_scenario(scenario)
 

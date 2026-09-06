@@ -133,7 +133,11 @@ def process_new_session(token : str = Header(... , alias = 'token')) :
         'message' : 'Not able to find session logs'
     }
 
-@app.api_route('/get-results' , methods = ['GET' , 'POST'])
+# * Stacked rather than one api_route(methods = [...]) call: api_route gives both
+# * verbs the same generated operation id, which FastAPI warns about at startup.
+# * Two decorators register two routes over one function body, each with its own id.
+@app.post('/get-results')
+@app.get('/get-results')
 async def get_results(request : Request) -> dict :
 
     # * One handler on both verbs, so a caller that guesses the wrong method
@@ -150,10 +154,15 @@ async def get_results(request : Request) -> dict :
     required : list = ['scenario_id' , 'transcription' , 'session_id' , 'user_id']
     missing : list = [field for field in required if field not in data]
 
-    if missing : raise HTTPException(
-        status_code = 400 ,
-        detail = f"Missing {' , '.join(repr(field) for field in missing)} in request body or query string."
-    )
+    if missing :
+
+        # * The access log shows only a bare 400, so record what the caller did send
+        state.logger.warning(f'get-results rejected : missing {missing} , got keys {sorted(data)}')
+
+        raise HTTPException(
+            status_code = 400 ,
+            detail = f"Missing {' , '.join(repr(field) for field in missing)} in request body or query string."
+        )
 
     return await get_results_route(
         scenario_id = data['scenario_id'] ,
