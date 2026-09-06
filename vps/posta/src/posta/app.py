@@ -133,17 +133,26 @@ def process_new_session(token : str = Header(... , alias = 'token')) :
         'message' : 'Not able to find session logs'
     }
 
-@app.post('/get-results')
+@app.api_route('/get-results' , methods = ['GET' , 'POST'])
 async def get_results(request : Request) -> dict :
 
-    data : dict = await request.json()
+    # * One handler on both verbs, so a caller that guesses the wrong method
+    # * lands here instead of on a 404. A GET usually carries no body, so the
+    # * query string is read as a fallback.
+    try : data : dict = await request.json()
+    except Exception : data = dict(request.query_params)
+
+    if not isinstance(data , dict) : raise HTTPException(
+        status_code = 400 ,
+        detail = 'Request body must be a JSON object.'
+    )
 
     required : list = ['scenario_id' , 'transcription' , 'session_id' , 'user_id']
     missing : list = [field for field in required if field not in data]
 
     if missing : raise HTTPException(
         status_code = 400 ,
-        detail = f"Missing {' , '.join(repr(field) for field in missing)} in request body."
+        detail = f"Missing {' , '.join(repr(field) for field in missing)} in request body or query string."
     )
 
     return await get_results_route(
