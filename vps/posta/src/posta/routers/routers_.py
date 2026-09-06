@@ -2,6 +2,7 @@ import json
 import traceback
 from typing import Any
 from logging import Logger
+from datetime import datetime , timezone
 
 from bson.objectid import ObjectId
 from bson.errors import InvalidId
@@ -205,17 +206,49 @@ async def get_results_route(
         session_id = session_id ,
         user_id = user_id ,
         scenario_id = scenario_id ,
+        transcription = transcription ,
         sessions_collection = sessions_collection ,
         logger = logger
     )
 
     return result
 
+def _normalise_transcription(transcription : Any) -> list :
+    '''
+    Shape the conversation for the dashboard's session schema : a list of
+    `{role , content}` with role limited to system / user / assistant.
+
+    # * Gemini-style 'model' becomes 'assistant' , and anything malformed is dropped
+    # * rather than stored , since one unusable line must not spoil the whole transcript.
+    '''
+
+    if isinstance(transcription , str) :
+        return [{'role' : 'user' , 'content' : transcription}] if transcription.strip() else []
+
+    if not isinstance(transcription , list) : return []
+
+    normalised : list = []
+
+    for entry in transcription :
+
+        if not isinstance(entry , dict) : continue
+
+        role = 'assistant' if entry.get('role') == 'model' else entry.get('role')
+        content = entry.get('content' , entry.get('text'))
+
+        if role not in ('system' , 'user' , 'assistant') : continue
+        if content is None : continue
+
+        normalised.append({'role' : role , 'content' : str(content)})
+
+    return normalised
+
 def _persist_to_session(
     result : dict ,
     session_id : str ,
     user_id : str ,
     scenario_id : str ,
+    transcription : Any ,
     sessions_collection : Any ,
     logger : Logger
 ) -> None :
@@ -228,17 +261,31 @@ def _persist_to_session(
 
     try :
 
+        # * `feedback` and `transcription` are what the dashboard actually reads ;
+        # * `overall_feedback` is kept alongside it so nothing already reading that
+        # * key breaks. Without these three the UI shows a scored session with an
+        # * empty transcript and no written feedback.
         update_result = sessions_collection.update_one(
             {'session_id' : session_id} ,
             {'$set' : {
                 'score' : result['score'] ,
-                'overall_feedback' : result['overall_feedback']
+                'feedback' : result['overall_feedback'] ,
+                'overall_feedback' : result['overall_feedback'] ,
+                'transcription' : _normalise_transcription(transcription) ,
+                'updatedAt' : datetime.now(timezone.utc)
             }}
         )
 
         if update_result.matched_count == 0 : logger.warning(
             f'No session doc with session_id : {session_id} '
             f'(student_id : {user_id} , scenario_id : {scenario_id}) , score not persisted.'
+        )
+
+        else : logger.info(
+            f'Mongo write : session_id = {session_id!r} , user_id = {user_id!r} , '
+            f'scenario_id = {scenario_id!r} , score = {result["score"]} , '
+            f'matched = {update_result.matched_count} , modified = {update_result.modified_count} , '
+            f'upserted_id = {update_result.upserted_id}'
         )
 
     except Exception as e : logger.error(

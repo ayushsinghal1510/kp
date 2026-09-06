@@ -108,19 +108,38 @@ def process_new_session(token : str = Header(... , alias = 'token')) :
 
         session_result = state.sessions_collection.insert_one(session_doc)
         new_session_id : str = str(session_result.inserted_id)
-        
+
+        state.logger.info(
+            f'Mongo insert : _id = {new_session_id} , '
+            f'session_id = {payload["session_id"]!r} , '
+            f'student_id = {payload["student_id"]!r} , '
+            f'scenario_id = {payload["scenario_id"]!r} , '
+            f'score = {score} , '
+            f'turns = {len(transcription) if isinstance(transcription , list) else type(transcription).__name__}'
+        )
+
+
         student_update_path = f"session_list.{payload['scenario_id']}"
         
-        state.students_collection.update_one(
+        student_result = state.students_collection.update_one(
             {"_id": ObjectId(payload['student_id']) if isinstance(payload['student_id'], str) else payload['student_id']},
             {"$push": {student_update_path: new_session_id}},
             upsert = True
         )
 
-        state.scenarios_collection.update_one(
-            {"_id" : ObjectId(payload['scenario_id']) if isinstance(payload['scenario_id'] , str) else payload['scenario_id']} , 
-            {"$push" : {"sessions" : new_session_id}} , 
+        scenario_result = state.scenarios_collection.update_one(
+            {"_id" : ObjectId(payload['scenario_id']) if isinstance(payload['scenario_id'] , str) else payload['scenario_id']} ,
+            {"$push" : {"sessions" : new_session_id}} ,
             upsert = True
+        )
+
+        # * upsert = True on both, so a non-zero upserted_id means the id did not exist
+        # * and a stray doc was just created rather than an existing one updated
+        state.logger.info(
+            f'Mongo push : student matched = {student_result.matched_count} , '
+            f'upserted_id = {student_result.upserted_id} , path = {student_update_path} ; '
+            f'scenario matched = {scenario_result.matched_count} , '
+            f'upserted_id = {scenario_result.upserted_id}'
         )
 
         return {
