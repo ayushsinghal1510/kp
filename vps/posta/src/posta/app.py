@@ -3,6 +3,7 @@ import uvicorn
 from contextlib import asynccontextmanager
 import os
 import requests
+from secrets import token_hex
 from bson.objectid import ObjectId
 
 from .loader import load_clients
@@ -18,6 +19,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from services import env_str_to_bool , env_str_to_list
+
+from .services import Trace
 
 from dotenv import load_dotenv
 
@@ -161,16 +164,48 @@ def process_new_session(token : str = Header(... , alias = 'token')) :
 @app.get('/get-results')
 async def get_results(request : Request) -> dict :
 
+    trace : Trace = Trace(
+        tag = 'get-results' ,
+        logger = state.logger ,
+        request_id = token_hex(3)
+    )
+
     # * One handler on both verbs, so a caller that guesses the wrong method
     # * lands here instead of on a 404. A GET usually carries no body, so the
     # * query string is read as a fallback.
-    try : data : dict = await request.json()
-    except Exception : data = dict(request.query_params)
+    body_error : str | None = None
 
-    if not isinstance(data , dict) : raise HTTPException(
-        status_code = 400 ,
-        detail = 'Request body must be a JSON object.'
-    )
+    try : data : dict = await request.json()
+
+    except Exception as e :
+
+        # * Recorded rather than swallowed : a caller sending JSON with the wrong
+        # * Content-Type lands here silently and then fails on 'missing fields' ,
+        # * which reads as a bug in this endpoint rather than in the request.
+        body_error = f'{type(e).__name__} : {e}'
+        data = dict(request.query_params)
+
+    # * Logged before validation , so a request that is about to be rejected still
+    # * leaves behind exactly what arrived
+    trace.open({
+        'method' : request.method ,
+        'url' : str(request.url) ,
+        'client' : request.client.host if request.client else None ,
+        'content-type' : request.headers.get('content-type') ,
+        'content-length' : request.headers.get('content-length') ,
+        'body-parse-error' : body_error ,
+        'read-from' : 'query-string' if body_error else 'json-body' ,
+        'payload' : data
+    })
+
+    if not isinstance(data , dict) :
+
+        trace.warn('payload is not a JSON object' , {'type' : type(data).__name__})
+
+        raise HTTPException(
+            status_code = 400 ,
+            detail = 'Request body must be a JSON object.'
+        )
 
     required : list = ['scenario_id' , 'transcription' , 'session_id' , 'user_id']
     missing : list = [field for field in required if field not in data]
@@ -178,25 +213,51 @@ async def get_results(request : Request) -> dict :
     if missing :
 
         # * The access log shows only a bare 400, so record what the caller did send
-        state.logger.warning(f'get-results rejected : missing {missing} , got keys {sorted(data)}')
+        trace.warn('rejected : missing fields' , {
+            'missing' : missing ,
+            'got-keys' : sorted(data)
+        })
 
         raise HTTPException(
             status_code = 400 ,
             detail = f"Missing {' , '.join(repr(field) for field in missing)} in request body or query string."
         )
 
-    return await get_results_route(
-        scenario_id = data['scenario_id'] ,
-        transcription = data['transcription'] ,
-        session_id = data['session_id'] ,
-        user_id = data['user_id'] ,
-        scenarios_collection = state.scenarios_collection ,
-        sessions_collection = state.sessions_collection ,
-        gemini_client = state.gemini_client ,
-        groq_client = state.groq_client ,
-        config = state.config['get-results'] ,
-        logger = state.logger
-    )
+    trace.log('all required fields present')
+
+    try :
+
+        result : dict = await get_results_route(
+            scenario_id = data['scenario_id'] ,
+            transcription = data['transcription'] ,
+            session_id = data['session_id'] ,
+            user_id = data['user_id'] ,
+            scenarios_collection = state.scenarios_collection ,
+            sessions_collection = state.sessions_collection ,
+            gemini_client = state.gemini_client ,
+            groq_client = state.groq_client ,
+            config = state.config['get-results'] ,
+            logger = state.logger ,
+            trace = trace
+        )
+
+    except HTTPException as e :
+
+        # * The 404 / 422 the route raises deliberately. Logged with the response the
+        # * caller actually receives , then re-raised unchanged.
+        trace.done(e.status_code , {'detail' : e.detail})
+
+        raise
+
+    except Exception as e :
+
+        trace.fail(e)
+
+        raise
+
+    trace.done(200 , result)
+
+    return result
 
 def main() :
 

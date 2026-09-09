@@ -14,7 +14,7 @@ from google.genai.types import GenerateContentConfig
 from fastapi import HTTPException
 
 from ..llm import FALLBACK_MARKER , GROQ_MODEL , run_json_with_fallback
-from ..services import create_generation_config , json_to_google_chat
+from ..services import Trace , create_generation_config , json_to_google_chat
 
 # * Fields a short scenario code may be stored under. `scenarioCode` is what posta writes ,
 # * `ScenarioId` is the name the frontend / Bubble export uses.
@@ -138,35 +138,72 @@ async def get_results_route(
     gemini_client : Client ,
     config : dict ,
     logger : Logger ,
-    groq_client : Any | None = None
+    groq_client : Any | None = None ,
+    trace : Trace | None = None
 ) -> dict :
 
-    logger.info(f'get-results : scenario_id = {scenario_id!r} , session_id = {session_id!r} , user_id = {user_id!r}')
+    # * Optional so an older caller still works ; a no-op stand-in keeps every call
+    # * site below unconditional rather than guarded by `if trace`
+    if trace is None : trace = Trace(tag = 'get-results' , logger = logger , request_id = '-')
+
+    trace.log('identifiers' , {
+        'scenario_id' : scenario_id ,
+        'session_id' : session_id ,
+        'user_id' : user_id ,
+        'transcription-type' : type(transcription).__name__ ,
+        'transcription-turns' : len(transcription) if isinstance(transcription , list) else None
+    })
 
     scenario : dict | None = _find_scenario(scenarios_collection , scenario_id)
 
     if scenario is None :
 
-        logger.warning(f'No scenario matched _id or {SCENARIO_CODE_FIELDS} for scenario_id : {scenario_id!r}')
+        trace.warn('no scenario matched by _id or by short code' , {
+            'scenario_id' : scenario_id ,
+            'code-fields-tried' : list(SCENARIO_CODE_FIELDS)
+        })
 
         raise HTTPException(
             status_code = 404 ,
             detail = f'No scenario found with scenario_id : {scenario_id}'
         )
 
+    trace.log('resolved the scenario' , {
+        '_id' : scenario.get('_id') ,
+        'name' : scenario.get('scenarioName') or scenario.get('scenario_name') ,
+        'fields' : sorted(scenario)
+    })
+
     rubric : dict = _extract_scenario(scenario)
 
-    if not rubric['scenario_prompt'] : raise HTTPException(
-        status_code = 422 ,
-        detail = f'Scenario {scenario_id} has no scenarioPrompt to assess against.'
-    )
+    # * The rubric the assessment is actually graded against , after both schemas have
+    # * been read. Sizes rather than the prose , which the payload log already holds.
+    trace.log('extracted the rubric' , {
+        'scenario_prompt-chars' : len(rubric['scenario_prompt']) ,
+        'difficulty' : rubric['difficulty'] ,
+        'questions' : rubric['questions_for_feedback'] ,
+        'movements' : rubric['movements']
+    })
+
+    if not rubric['scenario_prompt'] :
+
+        trace.warn('scenario has no prompt to assess against' , {'scenario_id' : scenario_id})
+
+        raise HTTPException(
+            status_code = 422 ,
+            detail = f'Scenario {scenario_id} has no scenarioPrompt to assess against.'
+        )
 
     transcription_text : str = _transcription_to_text(transcription)
+
+    trace.log('flattened the transcription' , {'chars' : len(transcription_text)})
 
     # * Short-circuit before spending a Gemini call on an empty consultation
     if not transcription_text :
 
-        logger.warning(f'Empty transcription for session_id : {session_id} , scoring 0.')
+        trace.warn('empty transcription , scoring 0 without calling a model' , {
+            'session_id' : session_id
+        })
 
         return {
             'score' : 0.0 ,
@@ -175,6 +212,11 @@ async def get_results_route(
 
     with open(config['prompt-path']) as system_prompt_file :
         system_prompt : str = system_prompt_file.read()
+
+    trace.log('loaded the assessor prompt' , {
+        'path' : config['prompt-path'] ,
+        'chars' : len(system_prompt)
+    })
 
     generation_config : GenerateContentConfig = await create_generation_config(system_prompt)
 
@@ -188,6 +230,15 @@ async def get_results_route(
         'content' : query
     }])
 
+    # * Prompt size is the usual cause of a slow or truncated answer , and it grows
+    # * with the transcript rather than with anything visible in the request
+    trace.log('calling the model' , {
+        'model' : config['model'] ,
+        'groq-model' : config.get('groq-model' , GROQ_MODEL) ,
+        'groq-configured' : groq_client is not None ,
+        'query-chars' : len(query)
+    })
+
     response : dict = await run_json_with_fallback(
         gemini_client = gemini_client ,
         contents = contents ,
@@ -198,10 +249,23 @@ async def get_results_route(
         logger = logger
     )
 
+    # * Raw score before coercion , because _coerce_score rescales anything over 11 :
+    # * a stored 1.8 that the model actually returned as 18 is otherwise unexplainable
+    trace.log('model returned' , {
+        'keys' : sorted(response) ,
+        'raw-score' : response.get('score') ,
+        'feedback-chars' : len(str(response.get('overall_feedback' , '')))
+    })
+
     result : dict = {
         'score' : _coerce_score(response.get('score')) ,
         'overall_feedback' : str(response.get('overall_feedback' , '')).strip()
     }
+
+    trace.log('coerced the score' , {
+        'from' : response.get('score') ,
+        'to' : result['score']
+    })
 
     # ! Both providers failed , so `result` is the mock FALLBACK_RESULT. The caller gets it
     # ! — a student staring at a blank feedback screen is the thing being avoided — but it
@@ -211,16 +275,21 @@ async def get_results_route(
     # ! the wording cannot quietly turn mock results into persisted ones.
     is_fallback : bool = bool(response.get(FALLBACK_MARKER))
 
-    if is_fallback : logger.error(
+    if is_fallback : trace.warn(
         f'Assessment unavailable for session_id : {session_id} , scenario_id : {scenario_id} , '
         f'user_id : {user_id} — returning the mock score {result["score"]} to the caller and '
         'not persisting it. The transcript is unassessed ; re-run this session once the '
         'provider recovers.'
     )
 
-    else : logger.info(
-        f'Assessed session_id : {session_id} , scenario_id : {scenario_id} , score : {result["score"]}'
-    )
+    else : trace.log('assessed' , {
+        'session_id' : session_id ,
+        'scenario_id' : scenario_id ,
+        'score' : result['score']
+    })
+
+    if not config.get('persist-to-session') :
+        trace.warn('persist-to-session is off in config.yml , the score is returned but not stored')
 
     if config.get('persist-to-session') and not is_fallback : _persist_to_session(
         result = result ,
@@ -229,7 +298,8 @@ async def get_results_route(
         scenario_id = scenario_id ,
         transcription = transcription ,
         sessions_collection = sessions_collection ,
-        logger = logger
+        logger = logger ,
+        trace = trace
     )
 
     return result
@@ -347,7 +417,8 @@ def _find_session_doc(
     session_id : str ,
     user_id : str ,
     scenario_id : str ,
-    logger : Logger
+    logger : Logger ,
+    trace : Trace | None = None
 ) -> dict | None :
     '''
     Locates the session doc to write the score onto.
@@ -361,16 +432,38 @@ def _find_session_doc(
     # ! docs have no createdAt , but an ObjectId leads with its timestamp.
     '''
 
+    if trace is None : trace = Trace(tag = 'persist' , logger = logger , request_id = '-')
+
     if session_id :
 
         doc = sessions_collection.find_one({'session_id' : session_id})
 
+        trace.log('lookup by session_id' , {
+            'session_id' : session_id ,
+            'found' : doc is not None ,
+            '_id' : doc['_id'] if doc is not None else None
+        })
+
         if doc is not None : return doc
+
+    else : trace.warn('no session_id was sent , falling back to newest-session lookup')
 
     student_variants : list = _id_variants(user_id)
     scenario_variants : list = _id_variants(scenario_id)
 
-    if not student_variants or not scenario_variants : return None
+    if not student_variants or not scenario_variants :
+
+        trace.warn('cannot fall back : student or scenario id is missing' , {
+            'student-variants' : student_variants ,
+            'scenario-variants' : scenario_variants
+        })
+
+        return None
+
+    trace.log('lookup by newest session for student + scenario' , {
+        'student-variants' : student_variants ,
+        'scenario-variants' : scenario_variants
+    })
 
     doc = sessions_collection.find_one(
         {
@@ -395,7 +488,8 @@ def _persist_to_session(
     scenario_id : str ,
     transcription : Any ,
     sessions_collection : Any ,
-    logger : Logger
+    logger : Logger ,
+    trace : Trace | None = None
 ) -> None :
     '''
     Best-effort write of the score back onto the session doc.
@@ -404,17 +498,33 @@ def _persist_to_session(
     here must not turn a successful assessment into a 500.
     '''
 
+    if trace is None : trace = Trace(tag = 'persist' , logger = logger , request_id = '-')
+
     try :
+
+        trace.log('persisting the score' , {
+            'session_id' : session_id ,
+            'user_id' : user_id ,
+            'scenario_id' : scenario_id ,
+            'score' : result['score']
+        })
 
         session_doc : dict | None = _find_session_doc(
             sessions_collection = sessions_collection ,
             session_id = session_id ,
             user_id = user_id ,
             scenario_id = scenario_id ,
-            logger = logger
+            logger = logger ,
+            trace = trace
         )
 
         normalised_transcription : list = _normalise_transcription(transcription)
+
+        trace.log('normalised the transcript for storage' , {
+            'turns' : len(normalised_transcription) ,
+            'roles' : [turn['role'] for turn in normalised_transcription] ,
+            'speakers' : sorted({turn.get('speaker' , '') for turn in normalised_transcription})
+        })
 
         # * `feedback` and `transcription` are what the dashboard actually reads ;
         # * `overall_feedback` is kept alongside it so nothing already reading that
@@ -442,28 +552,49 @@ def _persist_to_session(
                 **update
             }
 
+            trace.log('no session doc matched , inserting one' , insert_doc)
+
             insert_result = sessions_collection.insert_one(insert_doc)
 
-            logger.warning(
-                f'No session doc for session_id {session_id!r} '
-                f'(student_id : {user_id} , scenario_id : {scenario_id}) , '
-                f'created one : _id = {insert_result.inserted_id} , score = {result["score"]}'
-            )
+            trace.warn('created a session doc for an unmatched assessment' , {
+                'session_id' : session_id ,
+                'student_id' : user_id ,
+                'scenario_id' : scenario_id ,
+                'inserted_id' : insert_result.inserted_id ,
+                'score' : result['score']
+            })
 
             return
+
+        trace.log('updating the session doc' , {
+            'filter' : {'_id' : session_doc['_id']} ,
+            '$set' : update
+        })
 
         update_result = sessions_collection.update_one(
             {'_id' : session_doc['_id']} ,
             {'$set' : update}
         )
 
-        logger.info(
-            f'Mongo write : _id = {session_doc["_id"]} , session_id = {session_id!r} , '
-            f'user_id = {user_id!r} , scenario_id = {scenario_id!r} , score = {result["score"]} , '
-            f'matched = {update_result.matched_count} , modified = {update_result.modified_count} , '
-            f'turns = {len(normalised_transcription)}'
-        )
+        # * matched = 1 , modified = 0 means the doc already held this exact score , which
+        # * looks identical to a successful write from the outside
+        trace.log('Mongo write' , {
+            '_id' : session_doc['_id'] ,
+            'session_id' : session_id ,
+            'user_id' : user_id ,
+            'scenario_id' : scenario_id ,
+            'score' : result['score'] ,
+            'matched' : update_result.matched_count ,
+            'modified' : update_result.modified_count ,
+            'turns' : len(normalised_transcription)
+        })
 
-    except Exception as e : logger.error(
-        f'Failed to persist score for session_id {session_id} : {e} , {traceback.format_exc()}'
-    )
+    except Exception as e :
+
+        # ! Swallowed on purpose : the caller has a valid result either way. Traced in full
+        # ! so a silent 'score not showing on the dashboard' has an explanation here.
+        trace.fail(e)
+
+        logger.error(
+            f'Failed to persist score for session_id {session_id} : {e} , {traceback.format_exc()}'
+        )
