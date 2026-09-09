@@ -32,6 +32,7 @@ async def lifespan(app : FastAPI) :
         config ,
         logger ,
         gemini_client ,
+        groq_client ,
         students_collection ,
         scenarios_collection ,
         sessions_collection
@@ -41,6 +42,7 @@ async def lifespan(app : FastAPI) :
     state.logger = logger
 
     state.gemini_client = gemini_client
+    state.groq_client = groq_client
 
     state.students_collection = students_collection
     state.scenarios_collection = scenarios_collection 
@@ -191,6 +193,7 @@ async def get_results(request : Request) -> dict :
         scenarios_collection = state.scenarios_collection ,
         sessions_collection = state.sessions_collection ,
         gemini_client = state.gemini_client ,
+        groq_client = state.groq_client ,
         config = state.config['get-results'] ,
         logger = state.logger
     )

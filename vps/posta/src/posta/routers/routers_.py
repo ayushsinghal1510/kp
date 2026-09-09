@@ -13,7 +13,7 @@ from google.genai.types import GenerateContentConfig
 
 from fastapi import HTTPException
 
-from ..llm import run_json_gemini
+from ..llm import GROQ_MODEL , run_json_with_fallback
 from ..services import create_generation_config , json_to_google_chat
 
 # * Fields a short scenario code may be stored under. `scenarioCode` is what posta writes ,
@@ -137,7 +137,8 @@ async def get_results_route(
     sessions_collection : Any ,
     gemini_client : Client ,
     config : dict ,
-    logger : Logger
+    logger : Logger ,
+    groq_client : Any | None = None
 ) -> dict :
 
     logger.info(f'get-results : scenario_id = {scenario_id!r} , session_id = {session_id!r} , user_id = {user_id!r}')
@@ -187,11 +188,13 @@ async def get_results_route(
         'content' : query
     }])
 
-    response : dict = await run_json_gemini(
+    response : dict = await run_json_with_fallback(
         gemini_client = gemini_client ,
         contents = contents ,
         generation_config = generation_config ,
         model = config['model'] ,
+        groq_client = groq_client ,
+        groq_model = config.get('groq-model' , GROQ_MODEL) ,
         logger = logger
     )
 

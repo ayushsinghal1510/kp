@@ -47,5 +47,10 @@ get-results :
   prompt-path : assets/prompts/get-results.md
   model : gemini-2.5-flash
 
+  # * Used only when Gemini fails — in practice when its free-tier daily quota is spent.
+  # * Needs GROQ_API_KEY in the environment ; without it a Gemini failure still falls
+  # * through to the canned FALLBACK_RESULT.
+  groq-model : openai/gpt-oss-120b
+
   # * When true , score / overall_feedback are also written back onto the session doc
   persist-to-session : true
