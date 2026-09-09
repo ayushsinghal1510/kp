@@ -13,7 +13,7 @@ from google.genai.types import GenerateContentConfig
 
 from fastapi import HTTPException
 
-from ..llm import GROQ_MODEL , run_json_with_fallback
+from ..llm import FALLBACK_RESULT , GROQ_MODEL , run_json_with_fallback
 from ..services import create_generation_config , json_to_google_chat
 
 # * Fields a short scenario code may be stored under. `scenarioCode` is what posta writes ,
@@ -203,9 +203,22 @@ async def get_results_route(
         'overall_feedback' : str(response.get('overall_feedback' , '')).strip()
     }
 
-    logger.info(f'Assessed session_id : {session_id} , scenario_id : {scenario_id} , score : {result["score"]}')
+    # ! Both providers failed , so `result` is the canned FALLBACK_RESULT and its 0.0 is not
+    # ! a mark — it is an outage. Persisting it would put a zero on the student's record
+    # ! that reads identically to a consultation they genuinely failed , and would now also
+    # ! create a session doc where none existed. The caller still gets the apology text.
+    is_fallback : bool = result['overall_feedback'] == FALLBACK_RESULT['overall_feedback']
 
-    if config.get('persist-to-session') : _persist_to_session(
+    if is_fallback : logger.error(
+        f'Assessment unavailable for session_id : {session_id} , scenario_id : {scenario_id} , '
+        'not persisting the fallback score.'
+    )
+
+    else : logger.info(
+        f'Assessed session_id : {session_id} , scenario_id : {scenario_id} , score : {result["score"]}'
+    )
+
+    if config.get('persist-to-session') and not is_fallback : _persist_to_session(
         result = result ,
         session_id = session_id ,
         user_id = user_id ,
@@ -304,6 +317,73 @@ def _normalise_transcription(transcription : Any) -> list :
 
     return normalised
 
+def _id_variants(value : Any) -> list :
+    '''
+    Both spellings of an id , since these collections hold a mix.
+
+    # * `/session` writes `student_id` straight from the JWE payload , which is a string ,
+    # * while docs created by the Node app carry an ObjectId. A query on one form silently
+    # * misses the other , so both are offered to `$in`.
+    '''
+
+    if value is None : return []
+
+    variants : list = [value]
+
+    if isinstance(value , str) :
+        try : variants.append(ObjectId(value))
+        except (InvalidId , TypeError) : pass
+
+    else : variants.append(str(value))
+
+    return variants
+
+def _find_session_doc(
+    sessions_collection : Any ,
+    session_id : str ,
+    user_id : str ,
+    scenario_id : str ,
+    logger : Logger
+) -> dict | None :
+    '''
+    Locates the session doc to write the score onto.
+
+    `session_id` first , then the newest session for this student and scenario.
+
+    # ! Callers routinely send an empty `session_id` — the whole reason scores were being
+    # ! computed and then dropped. The student and scenario ids do arrive , and a student
+    # ! can only be in one consultation at a time , so the newest of their sessions for
+    # ! this scenario is the one just finished. `_id` descending is the ordering : these
+    # ! docs have no createdAt , but an ObjectId leads with its timestamp.
+    '''
+
+    if session_id :
+
+        doc = sessions_collection.find_one({'session_id' : session_id})
+
+        if doc is not None : return doc
+
+    student_variants : list = _id_variants(user_id)
+    scenario_variants : list = _id_variants(scenario_id)
+
+    if not student_variants or not scenario_variants : return None
+
+    doc = sessions_collection.find_one(
+        {
+            'student_id' : {'$in' : student_variants} ,
+            'scenario_id' : {'$in' : scenario_variants}
+        } ,
+        sort = [('_id' , -1)]
+    )
+
+    if doc is not None : logger.info(
+        f'session_id {session_id!r} did not match ; falling back to the newest session '
+        f'for student_id {user_id!r} + scenario_id {scenario_id!r} : _id = {doc["_id"]} , '
+        f'session_id = {doc.get("session_id")!r}'
+    )
+
+    return doc
+
 def _persist_to_session(
     result : dict ,
     session_id : str ,
@@ -322,31 +402,62 @@ def _persist_to_session(
 
     try :
 
+        session_doc : dict | None = _find_session_doc(
+            sessions_collection = sessions_collection ,
+            session_id = session_id ,
+            user_id = user_id ,
+            scenario_id = scenario_id ,
+            logger = logger
+        )
+
+        normalised_transcription : list = _normalise_transcription(transcription)
+
         # * `feedback` and `transcription` are what the dashboard actually reads ;
         # * `overall_feedback` is kept alongside it so nothing already reading that
         # * key breaks. Without these three the UI shows a scored session with an
         # * empty transcript and no written feedback.
+        update : dict = {
+            'score' : result['score'] ,
+            'feedback' : result['overall_feedback'] ,
+            'overall_feedback' : result['overall_feedback'] ,
+            'transcription' : normalised_transcription ,
+            'updatedAt' : datetime.now(timezone.utc)
+        }
+
+        if session_doc is None :
+
+            # ! No doc to attach to , so the assessment becomes one. Without this the
+            # ! transcript and score are computed , logged , returned , and then lost —
+            # ! nothing reaches the dashboard at all. Written with the ids as sent so a
+            # ! later /get-results for the same student and scenario finds it.
+            insert_doc : dict = {
+                'session_id' : session_id ,
+                'student_id' : user_id ,
+                'scenario_id' : scenario_id ,
+                'createdAt' : datetime.now(timezone.utc) ,
+                **update
+            }
+
+            insert_result = sessions_collection.insert_one(insert_doc)
+
+            logger.warning(
+                f'No session doc for session_id {session_id!r} '
+                f'(student_id : {user_id} , scenario_id : {scenario_id}) , '
+                f'created one : _id = {insert_result.inserted_id} , score = {result["score"]}'
+            )
+
+            return
+
         update_result = sessions_collection.update_one(
-            {'session_id' : session_id} ,
-            {'$set' : {
-                'score' : result['score'] ,
-                'feedback' : result['overall_feedback'] ,
-                'overall_feedback' : result['overall_feedback'] ,
-                'transcription' : _normalise_transcription(transcription) ,
-                'updatedAt' : datetime.now(timezone.utc)
-            }}
+            {'_id' : session_doc['_id']} ,
+            {'$set' : update}
         )
 
-        if update_result.matched_count == 0 : logger.warning(
-            f'No session doc with session_id : {session_id} '
-            f'(student_id : {user_id} , scenario_id : {scenario_id}) , score not persisted.'
-        )
-
-        else : logger.info(
-            f'Mongo write : session_id = {session_id!r} , user_id = {user_id!r} , '
-            f'scenario_id = {scenario_id!r} , score = {result["score"]} , '
+        logger.info(
+            f'Mongo write : _id = {session_doc["_id"]} , session_id = {session_id!r} , '
+            f'user_id = {user_id!r} , scenario_id = {scenario_id!r} , score = {result["score"]} , '
             f'matched = {update_result.matched_count} , modified = {update_result.modified_count} , '
-            f'upserted_id = {update_result.upserted_id}'
+            f'turns = {len(normalised_transcription)}'
         )
 
     except Exception as e : logger.error(
