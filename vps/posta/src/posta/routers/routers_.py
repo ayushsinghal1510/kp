@@ -1,4 +1,5 @@
 import json
+import re
 import traceback
 from typing import Any
 from logging import Logger
@@ -213,6 +214,60 @@ async def get_results_route(
 
     return result
 
+_SPEAKER_LINE = re.compile(r'^([^:]{1,40}?)\s*:\s*(.*)$')
+
+def _parse_dialogue(text : str) -> list :
+    '''
+    Split a `Speaker: line` transcript into `{role , content}` turns.
+
+    # * The chat platform sends the consultation as one string , e.g.
+    # *     'h: Hello.\\r\\nJohn Smith: Hello.'
+    # * Stored whole it renders as a single turn attributed to the student , with the
+    # * patient's replies buried inside it.
+    # *
+    # * Roles come from the order speakers first appear : the student opens the
+    # * consultation , so the first label seen is 'user' and every other label is
+    # * 'assistant'. Names are not matched against the scenario , since the persona
+    # * name is not reliably the label used here.
+    '''
+
+    turns : list = []
+    speakers : list = []
+
+    for raw_line in text.replace('\r\n' , '\n').replace('\r' , '\n').split('\n') :
+
+        line : str = raw_line.strip()
+
+        if not line : continue
+
+        match = _SPEAKER_LINE.match(line)
+
+        # * A line with no 'Speaker:' prefix is a continuation of the turn above ,
+        # * not a new one — a wrapped paragraph must not become its own bubble.
+        if match is None :
+
+            if turns : turns[-1]['content'] += ' ' + line
+
+            continue
+
+        label : str = match.group(1).strip()
+        said : str = match.group(2).strip()
+
+        if not label : continue
+
+        if label not in speakers : speakers.append(label)
+
+        role : str = 'user' if speakers.index(label) == 0 else 'assistant'
+
+        # * `speaker` keeps the label the transcript used , so the dashboard can print
+        # * 'h:' and 'John Smith:' rather than a generic 'User:' / 'Assistant:'
+        if said : turns.append({'role' : role , 'content' : said , 'speaker' : label})
+
+    # * No speaker labels at all : keep the text rather than losing the transcript
+    if not turns and text.strip() : return [{'role' : 'user' , 'content' : text.strip()}]
+
+    return turns
+
 def _normalise_transcription(transcription : Any) -> list :
     '''
     Shape the conversation for the dashboard's session schema : a list of
@@ -222,8 +277,7 @@ def _normalise_transcription(transcription : Any) -> list :
     # * rather than stored , since one unusable line must not spoil the whole transcript.
     '''
 
-    if isinstance(transcription , str) :
-        return [{'role' : 'user' , 'content' : transcription}] if transcription.strip() else []
+    if isinstance(transcription , str) : return _parse_dialogue(transcription)
 
     if not isinstance(transcription , list) : return []
 
@@ -239,7 +293,11 @@ def _normalise_transcription(transcription : Any) -> list :
         if role not in ('system' , 'user' , 'assistant') : continue
         if content is None : continue
 
-        normalised.append({'role' : role , 'content' : str(content)})
+        normalised.append({
+            'role' : role ,
+            'content' : str(content) ,
+            'speaker' : str(entry.get('speaker' , entry.get('name' , '')))
+        })
 
     return normalised
 
