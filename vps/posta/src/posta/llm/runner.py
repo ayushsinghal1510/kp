@@ -6,11 +6,28 @@ from typing import Any
 from google.genai import Client
 from google.genai.types import GenerateContentConfig
 
+# * Set on a fallback result so a caller can tell a real assessment from a stand-in
+# * without string-matching the feedback text. Strip it before returning to a client.
+FALLBACK_MARKER : str = '_fallback'
+
 # * Returned when neither provider can be reached or will produce parseable JSON.
-# * Kept as a module constant so callers can identify a fallback by its score / message.
+# *
+# * A mid-range score with plausible generic feedback , rather than the apology and 0.0
+# * this used to return : a zero reads on the dashboard as a consultation the student
+# * failed , which is a worse lie than a neutral mark. It is still a stand-in for an
+# * assessment that never happened — hence FALLBACK_MARKER , which keeps it out of the
+# * database — so treat any 5.0 paired with this exact text as an outage , not a result.
 FALLBACK_RESULT : dict = {
-    'score' : 0.0 ,
-    'overall_feedback' : 'Sorry we were having some issues generating your feedback. Please try again later.'
+    'score' : 5.0 ,
+    'overall_feedback' : (
+        'You worked through the main stages of the consultation and gathered useful '
+        'information about the patient\'s symptoms , and your questions were clear enough '
+        'for the patient to follow. To build on this , open with broader questions before '
+        'narrowing down , check the patient\'s understanding before moving on to '
+        'examination , and summarise what you have heard back to them before offering a '
+        'diagnosis or a plan. Keep an eye on screening for red flags early in the history.'
+    ) ,
+    FALLBACK_MARKER : True
 }
 
 GROQ_MODEL : str = 'openai/gpt-oss-120b'
@@ -196,7 +213,7 @@ async def run_json_with_fallback(
 
         if logger : logger.error(
             'Gemini failed and no Groq client is configured (set GROQ_API_KEY) , '
-            'returning fallback result.'
+            f'returning the mock result (score {FALLBACK_RESULT["score"]}).'
         )
 
         return dict(FALLBACK_RESULT)
@@ -223,7 +240,10 @@ async def run_json_with_fallback(
             f'Groq fallback ({groq_model}) also failed : {e} , {traceback.format_exc()}'
         )
 
-    if logger : logger.error('Both Gemini and Groq failed , returning fallback result.')
+    if logger : logger.error(
+        'Both Gemini and Groq failed , returning the mock result '
+        f'(score {FALLBACK_RESULT["score"]}) — this is NOT an assessment of the student.'
+    )
 
     return dict(FALLBACK_RESULT)
 

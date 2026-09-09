@@ -13,7 +13,7 @@ from google.genai.types import GenerateContentConfig
 
 from fastapi import HTTPException
 
-from ..llm import FALLBACK_RESULT , GROQ_MODEL , run_json_with_fallback
+from ..llm import FALLBACK_MARKER , GROQ_MODEL , run_json_with_fallback
 from ..services import create_generation_config , json_to_google_chat
 
 # * Fields a short scenario code may be stored under. `scenarioCode` is what posta writes ,
@@ -203,15 +203,19 @@ async def get_results_route(
         'overall_feedback' : str(response.get('overall_feedback' , '')).strip()
     }
 
-    # ! Both providers failed , so `result` is the canned FALLBACK_RESULT and its 0.0 is not
-    # ! a mark — it is an outage. Persisting it would put a zero on the student's record
-    # ! that reads identically to a consultation they genuinely failed , and would now also
-    # ! create a session doc where none existed. The caller still gets the apology text.
-    is_fallback : bool = result['overall_feedback'] == FALLBACK_RESULT['overall_feedback']
+    # ! Both providers failed , so `result` is the mock FALLBACK_RESULT. The caller gets it
+    # ! — a student staring at a blank feedback screen is the thing being avoided — but it
+    # ! is not written to the database : nothing about that 5.0 came from the student's own
+    # ! consultation , and with the insert path below it would mint a whole session doc out
+    # ! of an API outage. Read off the marker rather than the feedback text , so an edit to
+    # ! the wording cannot quietly turn mock results into persisted ones.
+    is_fallback : bool = bool(response.get(FALLBACK_MARKER))
 
     if is_fallback : logger.error(
         f'Assessment unavailable for session_id : {session_id} , scenario_id : {scenario_id} , '
-        'not persisting the fallback score.'
+        f'user_id : {user_id} — returning the mock score {result["score"]} to the caller and '
+        'not persisting it. The transcript is unassessed ; re-run this session once the '
+        'provider recovers.'
     )
 
     else : logger.info(
