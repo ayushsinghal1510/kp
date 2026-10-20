@@ -20,47 +20,99 @@ def handle_po_upload_section(
         st.subheader('Upload Purchase Order')
         
         po_files : list[Any] | None = st.file_uploader(
-            'Upload Purchase Order (LLM)' , 
-            accept_multiple_files = True , 
+            'Upload Purchase Order (LLM)' ,
+            accept_multiple_files = True ,
             key = 'po_upload'
         )
 
-        if st.button('Extract PO with LLM') and po_files : 
-            
-            all_new_data : list[dict[str , Any]] = []
-            total_files : int = len(po_files)
-            
-            progress_bar : Any = st.progress(
-                0 , 
-                text = 'Starting PO processing...'
-            )
-            
-            for idx , file in enumerate(po_files) : 
-                
-                save_uploaded_file(file)
+        master_df : pl.DataFrame = st.session_state.df
 
-                extracted_data : list[dict[str , Any]] = process_document_with_llm(
-                    file , 
-                    st.session_state.prompts['ingestion'] , 
-                    st.session_state.gemini_client
+        # * Supplier is deterministic : the user picks it from the master list so the
+        # * LLM never has to infer or output it during ingestion.
+        supplier_options : list[str] = []
+
+        if 'Supplier' in master_df.columns and not master_df.is_empty() :
+            supplier_options = sorted(
+                s for s in master_df.get_column('Supplier').drop_nulls().unique().to_list()
+                if isinstance(s , str) and s.strip()
+            )
+
+        if supplier_options :
+            selected_supplier : str = st.selectbox(
+                'Select Supplier' ,
+                options = supplier_options ,
+                key = 'po_supplier_select'
+            )
+
+        else :
+            selected_supplier : str = st.text_input(
+                'Enter Supplier' ,
+                key = 'po_supplier_input' ,
+                help = 'No suppliers in the master list yet — type the supplier name.'
+            ).strip()
+
+        # * Surface how many known products will be sent as the canonical reference,
+        # * so it is obvious whether the LLM is being given the CSV to match against.
+        reference_count : int = 0
+
+        if selected_supplier and 'Supplier' in master_df.columns and not master_df.is_empty() :
+            reference_count = master_df.filter(
+                pl.col('Supplier').cast(pl.String).str.strip_chars().str.to_lowercase()
+                == selected_supplier.strip().lower()
+            ).height
+
+        if reference_count > 0 :
+            st.caption(f'📋 {reference_count} known products for "{selected_supplier}" will be sent to the LLM as the canonical reference.')
+
+        else :
+            st.caption(f'⚠️ No existing products recorded for "{selected_supplier}" — the LLM will read names directly from the document.')
+
+        if st.button('Extract PO with LLM') :
+
+            if not po_files :
+                st.warning('Please upload at least one purchase order file.')
+
+            elif not selected_supplier :
+                st.warning('Please select or enter a supplier first.')
+
+            else :
+
+                all_new_data : list[dict[str , Any]] = []
+                total_files : int = len(po_files)
+
+                progress_bar : Any = st.progress(
+                    0 ,
+                    text = 'Starting PO processing...'
                 )
-                
-                for row in extracted_data : 
-                    
-                    row['Filename'] = file.name
-                    
-                all_new_data.extend(extracted_data)
-                
-                current_step : int = idx + 1
-                progress_percentage : float = current_step / total_files
-                
-                progress_bar.progress(
-                    progress_percentage , 
-                    text = f'Processed {current_step} of {total_files} POs'
-                )
-                
-            st.session_state.pending_po_data = all_new_data
-            progress_bar.empty()
+
+                for idx , file in enumerate(po_files) :
+
+                    save_uploaded_file(file)
+
+                    extracted_data : list[dict[str , Any]] = process_document_with_llm(
+                        file ,
+                        st.session_state.prompts['ingestion'] ,
+                        st.session_state.openrouter_client ,
+                        selected_supplier ,
+                        master_df
+                    )
+
+                    for row in extracted_data :
+
+                        row['Filename'] = file.name
+
+                    all_new_data.extend(extracted_data)
+
+                    current_step : int = idx + 1
+                    progress_percentage : float = current_step / total_files
+
+                    progress_bar.progress(
+                        progress_percentage ,
+                        text = f'Processed {current_step} of {total_files} POs'
+                    )
+
+                st.session_state.pending_po_data = all_new_data
+                progress_bar.empty()
 
 
 def handle_po_approval_section() -> None : 
@@ -356,16 +408,19 @@ def handle_po_approval_section() -> None :
             ])
             
             standard_cols : list[str] = [
-                c for c in st.session_state.root_csv_columns 
+                c for c in st.session_state.root_csv_columns
                 if c not in [
-                    'Previous Price' , 
-                    'Promotion Price' , 
-                    'Pack Price Currency' , 
-                    'Product Name' , 
-                    'Supplier' , 
-                    'Match Product Name' , 
+                    'Previous Price' ,
+                    'Promotion Price' ,
+                    'Pack Price Currency' ,
+                    'Product Name' ,
+                    'Supplier' ,
+                    'Match Product Name' ,
                     'Match Supplier' ,
-                    'Discount'
+                    'Discount' ,
+                    # * Packing Size is owned by Excel ; keep the existing master
+                    # * value and do not let the invoice overwrite it.
+                    'Packing Size'
                 ]
             ]
             
@@ -378,13 +433,23 @@ def handle_po_approval_section() -> None :
             ]
             
             special_exprs : list[pl.Expr] = [
+                # * Previous Price comes from invoices only. When a product still has
+                # * no real invoice price (Excel-seeded, Pack Price == 0), the first
+                # * invoice sets BOTH the current and previous price to the invoice
+                # * value — the Excel price is never used as the previous price.
                 pl.when(
                     pl.col('Pack Price_new').is_not_null()
                 ).then(
-                    pl.col('Pack Price')
+                    pl.when(
+                        pl.col('Pack Price').fill_null(0.0) > 0.0
+                    ).then(
+                        pl.col('Pack Price')
+                    ).otherwise(
+                        pl.col('Pack Price_new')
+                    )
                 ).otherwise(
                     pl.col('Previous Price')
-                ).alias('Previous Price') , 
+                ).alias('Previous Price') ,
                 
                 pl.when(
                     pl.col('Promotion Price_new').cast(

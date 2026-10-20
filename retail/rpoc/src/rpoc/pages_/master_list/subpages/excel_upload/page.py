@@ -173,33 +173,20 @@ def handle_excel_upload_section(
                     how = 'anti'
                 )
 
-                if not updates.is_empty() : 
-
-                    if 'Pack Price' in existing_df.columns : 
-                        existing_df = existing_df.with_columns(
-                            pl.when(
-                                pl.col('_key').is_in(
-                                    updates.get_column('_key')
-                                )
-                            ).then(
-                                pl.col('Pack Price')
-                            ).otherwise(
-                                pl.col('Previous Price')
-                            ).alias('Previous Price')
-                        )
+                if not updates.is_empty() :
 
                     existing_df = existing_df.join(
-                        updates , 
-                        on = '_key' , 
-                        how = 'left' , 
+                        updates ,
+                        on = '_key' ,
+                        how = 'left' ,
                         suffix = '_new'
                     )
-                    
+
+                    # * Excel only refreshes Product Name + Packing Size for existing
+                    # * products. It must NOT touch any price field — pricing and the
+                    # * Previous Price history belong exclusively to invoices.
                     update_cols : list[str] = [
-                        'Pack Price' , 
-                        'Selling Price' , 
-                        'Promotion Price' , 
-                        'Pack Price Currency' , 
+                        'Packing Size' ,
                         'Filename'
                     ]
 
@@ -210,13 +197,8 @@ def handle_excel_upload_section(
                         for c in update_cols if f'{c}_new' in existing_df.columns
                     ]
 
-                    if exprs : 
+                    if exprs :
                         existing_df = existing_df.with_columns(*exprs)
-
-                    if 'Promotion Price' in existing_df.columns and 'Selling Price' in existing_df.columns : 
-                        existing_df = existing_df.with_columns(
-                            _get_promo_price_expr()
-                        )
 
                     drop_cols : list[str] = [
                         c for c in existing_df.columns if c.endswith('_new')

@@ -9,6 +9,7 @@ from groq import Groq
 from .services_ import load_json
 
 from google import genai
+from openai import OpenAI
 
 
 
@@ -22,9 +23,15 @@ def load_session_state() :
         api_key=os.environ.get("GEMINI_API_KEY"),
     )
 
+    if 'openrouter_client' not in st.session_state :
+        st.session_state.openrouter_client = OpenAI(
+            base_url = 'https://openrouter.ai/api/v1' ,
+            api_key = os.environ['OPENROUTER_API_KEY']
+        )
+
     if 'config' not in st.session_state : 
 
-        with open('config.yml') as config_file : 
+        with open('config.yml' , encoding = 'utf-8') as config_file :
             st.session_state.config = yaml.safe_load(config_file)
 
     if 'master_list_config' not in st.session_state : 
@@ -37,20 +44,29 @@ def load_session_state() :
         st.session_state.ordering_lists_config = st.session_state.config['ordering-lists']
 
 
-    if 'prompts' not in st.session_state : 
-        st.session_state.prompts = {}
+    required_prompts : list[str] = [
+        'review' ,
+        'ingestion' ,
+        'coder' ,
+        'chain-rules'
+    ]
 
-        with open(st.session_state.config['main']['prompts']['review']) as prompt_file : 
-            st.session_state.prompts['review'] = prompt_file.read()
+    # * Reload if missing or only partially populated (e.g. a previous run crashed
+    # * midway) ; build into a local dict and assign atomically so a failure can
+    # * never leave a half-filled prompts dict wedged in session state.
+    if (
+        'prompts' not in st.session_state or
+        any(key not in st.session_state.prompts for key in required_prompts)
+    ) :
 
-        with open(st.session_state.config['main']['prompts']['ingestion']) as prompt_file : 
-            st.session_state.prompts['ingestion'] = prompt_file.read()
+        loaded_prompts : dict[str , str] = {}
 
-        with open(st.session_state.config['main']['prompts']['coder']) as prompt_file : 
-            st.session_state.prompts['coder'] = prompt_file.read()
+        for key in required_prompts :
 
-        with open(st.session_state.config['main']['prompts']['chain-rules']) as prompt_file : 
-            st.session_state.prompts['chain-rules'] = prompt_file.read()
+            with open(st.session_state.config['main']['prompts'][key] , encoding = 'utf-8') as prompt_file :
+                loaded_prompts[key] = prompt_file.read()
+
+        st.session_state.prompts = loaded_prompts
 
     if 'df' not in st.session_state : 
         st.session_state.df = pl.read_csv(st.session_state.config['main']['path']['csv'])

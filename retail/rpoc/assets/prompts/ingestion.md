@@ -2,6 +2,14 @@
 
 Extract product pricing information from the attached file with absolute precision.
 
+### ⚠️ MANDATORY: ANALYZE, DON'T TRANSCRIBE — ONE PRODUCT = ONE ENTRY
+
+* You are an **analyst**, not an OCR / transcription tool. Read and understand the whole document, identify the **distinct products**, and output each distinct product **exactly once**.
+* **NO DUPLICATES, NO REPETITION.** Every product must appear in the `products` array **one single time**. Never repeat the same product, never loop, never re-emit a product you have already output. Two entries are the SAME product if they share the same Barcode, or the same (Product Name + Packing Size). Merge them into one.
+* If the same item appears on multiple lines or pages (multi-page invoices, FOC duplicate rows, repeated rows), **consolidate it into a single entry** following the deduplication and FOC rules below — do not output it again.
+* Before finishing, mentally scan your own output: if any product name or barcode appears more than once, collapse it to a single entry. The number of output entries must equal the number of **unique** products in the document, not the number of printed rows.
+* Stop once every unique product has been emitted once. Do not pad, continue, or regenerate.
+
 ### CRITICAL EXTRACTION RULES
 
 1. **PRODUCT NAME:** Extract the **longest possible**, most descriptive name visually present. Include all weight/quantity descriptors, flavor profiles, and packaging variations (e.g., 'BAKE STORY KOKOPIE CHOCOLATE FLAVOUR 20Gx10PCSx9BAGS'), even put astrisk as there in the product name. Never truncate or abbreviate.

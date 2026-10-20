@@ -1,14 +1,102 @@
 import re
 import json
+import base64
 import docx2txt
 
 import pandas as pd
+import polars as pl
 import streamlit as st
 
 from io import BytesIO
 from typing import Any
 
-from google.genai import types
+
+def _build_known_products_block(
+    master_df : Any ,
+    supplier : str
+) -> str :
+
+    if (
+        master_df is None or
+        master_df.is_empty() or
+        'Supplier' not in master_df.columns
+    ) :
+        return ''
+
+    supplier_rows : Any = master_df.filter(
+        pl.col('Supplier').cast(pl.String).str.strip_chars().str.to_lowercase()
+        == supplier.strip().lower()
+    )
+
+    if supplier_rows.is_empty() :
+        return ''
+
+    reference_cols : list[str] = [
+        c for c in ['Product Name' , 'Packing Size']
+        if c in supplier_rows.columns
+    ]
+
+    supplier_rows = supplier_rows.select(reference_cols).unique()
+
+    # * Send up to 20 products as a REFERENCE SAMPLE so the LLM can learn this
+    # * supplier's naming style and packing-size convention — not as the complete
+    # * catalogue. If the supplier has more, send a random sample of 20.
+    if supplier_rows.height > 20 :
+        supplier_rows = supplier_rows.sample(
+            n = 20 ,
+            shuffle = True
+        )
+
+    product_lines : list[str] = []
+
+    for record in supplier_rows.iter_rows(named = True) :
+
+        product_name : str = str(record.get('Product Name' , '')).strip()
+
+        if not product_name or product_name.lower() == 'nan' :
+            continue
+
+        raw_packing : Any = record.get('Packing Size' , '')
+
+        try :
+            packing_size : Any = int(float(raw_packing))
+        except (TypeError , ValueError) :
+            packing_size = raw_packing
+
+        product_lines.append(
+            f'- {product_name} | Packing Size : {packing_size}'
+        )
+
+    if not product_lines :
+        return ''
+
+    return (
+        f'### ⚠️ READ THIS FIRST — REFERENCE SAMPLE FOR "{supplier}"\n'
+        f'Below is a SAMPLE of how some of this supplier\'s products are already '
+        f'recorded in our system, one per line as "<Product Name> | Packing Size : '
+        f'<root packing size>". This is NOT the complete catalogue and NOT the only '
+        f'set of products — it is a reference to help you understand HOW this supplier '
+        f'names products and HOW its packing-size notation maps to a root packing '
+        f'size. The document will contain other products that are not in this sample '
+        f'— extract those too.\n'
+        f'1. NAMING : Learn this supplier\'s naming style from the examples. When a '
+        f'document item clearly matches one listed here, output that Product Name '
+        f'EXACTLY as written (character for character) so it reconciles with the '
+        f'existing record. For a product NOT in this sample, do not invent a match — '
+        f'extract it and name it following the SAME naming pattern/style shown here.\n'
+        f'2. PACKING SIZE CONVENTION : The same written notation can mean different '
+        f'root packing sizes for different suppliers (e.g. "2x4" may be a root '
+        f'packing size of 2 for one supplier but 8 for another). Infer how THIS '
+        f'supplier\'s notation maps to the recorded root Packing Size from the '
+        f'examples, then apply that SAME interpretation to EVERY document line item — '
+        f'both the ones listed here and the new ones that are not.\n'
+        f'3. Each product may appear in the output AT MOST ONCE.\n\n'
+        f'REFERENCE PRODUCTS :\n'
+        + '\n'.join(product_lines)
+        + '\n\n--- END OF REFERENCE SAMPLE. Use it to learn this supplier\'s naming '
+        + 'and packing-size patterns ; still extract every product in the document, '
+        + 'including ones not listed above. ---\n'
+    )
 
 
 def _extract_content_from_file(
@@ -103,79 +191,186 @@ def _extract_content_from_file(
     return content
 
 
+def _extract_json_object(raw_text : str) -> str :
+
+    # * Strip any markdown fences, then slice from the first '{' to the last '}'
+    # * so stray prose before / after the JSON object can never break parsing.
+    cleaned : str = re.sub(
+        r'```json|```' ,
+        '' ,
+        raw_text ,
+        flags = re.IGNORECASE
+    ).strip()
+
+    start : int = cleaned.find('{')
+    end : int = cleaned.rfind('}')
+
+    if start != -1 and end != -1 and end > start :
+        return cleaned[start : end + 1]
+
+    return cleaned
+
+
+def _lenient_json_loads(raw_text : str) -> dict[str , Any] :
+
+    # * Fast path : a clean, well-formed response.
+    try :
+        return json.loads(_extract_json_object(raw_text))
+    except Exception :
+        pass
+
+    # * Repair a truncated / malformed object. Walk the text tracking string state
+    # * and the brace/bracket stack, remembering the last position where a complete
+    # * ARRAY ELEMENT closed (i.e. just after a '}' / ']' whose parent is an array).
+    # * Cut there and append the matching closers so every complete product that
+    # * was fully emitted survives, and the partial trailing one is dropped.
+    cleaned : str = re.sub(
+        r'```json|```' ,
+        '' ,
+        raw_text ,
+        flags = re.IGNORECASE
+    ).strip()
+
+    start : int = cleaned.find('{')
+
+    if start == -1 :
+        return {}
+
+    stack : list[str] = []
+    in_string : bool = False
+    escape : bool = False
+
+    last_safe_index : int = -1
+    last_safe_stack : list[str] = []
+
+    for i in range(start , len(cleaned)) :
+
+        ch : str = cleaned[i]
+
+        if in_string :
+
+            if escape :
+                escape = False
+            elif ch == '\\' :
+                escape = True
+            elif ch == '"' :
+                in_string = False
+
+            continue
+
+        if ch == '"' :
+            in_string = True
+
+        elif ch in '{[' :
+            stack.append(ch)
+
+        elif ch in '}]' :
+
+            if stack :
+                stack.pop()
+
+            # * A complete element sitting directly inside an array just closed.
+            if stack and stack[-1] == '[' :
+                last_safe_index = i + 1
+                last_safe_stack = stack.copy()
+
+    if last_safe_index == -1 :
+        return {}
+
+    repaired : str = cleaned[start : last_safe_index]
+
+    for opener in reversed(last_safe_stack) :
+        repaired += '}' if opener == '{' else ']'
+
+    try :
+        return json.loads(repaired)
+    except Exception :
+        return {}
+
+
 def _call_llm_with_retries(
-    content : list[Any] , 
-    model_client : Any , 
+    content : list[Any] ,
+    model_client : Any ,
     max_retries : int = 3
-) -> dict[str , Any] : 
+) -> dict[str , Any] :
 
     data : dict[str , Any] = {}
     raw_response_text : str = ''
 
-    formatted_parts : list[Any] = []
+    formatted_parts : list[dict[str , Any]] = []
 
-    for item in content : 
+    for item in content :
 
         if isinstance(
-            item , 
+            item ,
             str
-        ) : 
+        ) :
 
             formatted_parts.append(
-                types.Part.from_text(
-                    text = item
-                )
+                {
+                    'type' : 'text' ,
+                    'text' : item
+                }
             )
 
         elif isinstance(
-            item , 
+            item ,
             dict
-        ) : 
+        ) :
 
-            formatted_parts.append(
-                types.Part.from_bytes(
-                    data = item.get('data' , b'') , 
-                    mime_type = item.get('mime_type' , '')
+            mime_type : str = item.get('mime_type' , '')
+            encoded : str = base64.b64encode(item.get('data' , b'')).decode('utf-8')
+            data_url : str = f'data:{mime_type};base64,{encoded}'
+
+            if mime_type == 'application/pdf' :
+
+                formatted_parts.append(
+                    {
+                        'type' : 'file' ,
+                        'file' : {
+                            'filename' : 'document.pdf' ,
+                            'file_data' : data_url
+                        }
+                    }
                 )
-            )
 
-    formatted_contents : list[Any] = [
-        types.Content(
-            role = 'user' , 
-            parts = formatted_parts
-        )
+            else :
+
+                formatted_parts.append(
+                    {
+                        'type' : 'image_url' ,
+                        'image_url' : {'url' : data_url}
+                    }
+                )
+
+    formatted_messages : list[dict[str , Any]] = [
+        {
+            'role' : 'user' ,
+            'content' : formatted_parts
+        }
     ]
 
     for attempt in range(max_retries) : 
 
         try : 
 
-            tools : list[Any] = [
-                types.Tool(
-                    googleSearch = types.GoogleSearch()
-                )
-            ]
-
-            generation_config : Any = types.GenerateContentConfig(
-                tools = tools
+            # * Same model as before (gemini-2.5-flash), now routed via OpenRouter.
+            # * JSON response format keeps output parseable ; reasoning is disabled
+            # * so thinking tokens don't starve the output budget on long invoices.
+            response : Any = model_client.chat.completions.create(
+                model = 'google/gemini-2.5-flash' ,
+                messages = formatted_messages ,
+                response_format = {'type' : 'json_object'} ,
+                max_tokens = 10000 ,
+                extra_body = {'reasoning' : {'enabled' : False}}
             )
 
-            response : Any = model_client.models.generate_content(
-                model = 'gemini-2.5-flash' , 
-                contents = formatted_contents , 
-                config = generation_config
-            )
+            raw_response_text = response.choices[0].message.content or ''
 
-            raw_response_text = response.text
+            data = _lenient_json_loads(raw_response_text)
 
-            cleaned_text : str = re.sub(
-                r'^```json\s*|```\s*$' , 
-                '' , 
-                raw_response_text.strip() , 
-                flags = re.MULTILINE | re.IGNORECASE
-            )
-
-            data = json.loads(cleaned_text)
+            if not data :
+                raise ValueError('No parseable JSON object found in response.')
 
             return data
 
@@ -198,16 +393,16 @@ def _call_llm_with_retries(
 
 
 def _process_and_deduplicate_products(
-    data : dict[str , Any]
-) -> list[dict[str , Any]] : 
+    data : dict[str , Any] ,
+    supplier : str
+) -> list[dict[str , Any]] :
 
     processed_items : list[dict[str , Any]] = []
 
-    raw_supplier : str = data.get(
-        'supplier' , 
-        'Unknown'
-    )
-    
+    # * Supplier is deterministic (chosen by the user) ; ignore whatever the LLM
+    # * may have returned for it.
+    raw_supplier : str = supplier
+
     exchange_rate : float = float(
         data.get('exchange_rate' , 1.0) or 1.0
     )
@@ -311,28 +506,48 @@ def _process_and_deduplicate_products(
 
 
 def process_document_with_llm(
-    uploaded_file : Any , 
-    prompt : str , 
-    model_client : Any
-) -> list[dict[str , Any]] : 
+    uploaded_file : Any ,
+    prompt : str ,
+    model_client : Any ,
+    supplier : str ,
+    master_df : Any
+) -> list[dict[str , Any]] :
 
-    try : 
+    try :
+
+        supplier_directive : str = (
+            f'\n\n### DETERMINISTIC SUPPLIER (MANDATORY)\n'
+            f'The supplier for this document is already known and fixed : "{supplier}".\n'
+            f'Do NOT infer, search for, or output the supplier. You may omit the '
+            f'"supplier" field entirely — it will be ignored and overwritten.\n'
+        )
+
+        known_products_block : str = _build_known_products_block(
+            master_df ,
+            supplier
+        )
+
+        # * Front-load the authoritative reference + supplier directive BEFORE the
+        # * large base prompt, otherwise the base prompt's "extract the longest name
+        # * from the document" rules dominate and the reference list is ignored.
+        augmented_prompt : str = known_products_block + supplier_directive + prompt
 
         content : list[Any] = _extract_content_from_file(
-            uploaded_file , 
-            prompt
+            uploaded_file ,
+            augmented_prompt
         )
 
         parsed_data : dict[str , Any] = _call_llm_with_retries(
-            content , 
+            content ,
             model_client
         )
 
-        if not parsed_data : 
+        if not parsed_data :
             return []
 
         processed_items : list[dict[str , Any]] = _process_and_deduplicate_products(
-            parsed_data
+            parsed_data ,
+            supplier
         )
 
         return processed_items
