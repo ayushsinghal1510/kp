@@ -67,12 +67,13 @@ chatbot :
     label : Download PDF
     
   coder-model :
-    model : llama-3.3-70b-versatile
+    model : openai/gpt-oss-120b
     temperature : 0
 
   rev-model :
-    model : llama-3.3-70b-versatile
-    temperature : 0
+    model : openai/gpt-oss-120b
+    temperature : 0.6
+    max_tokens : 2048
 
 ordering-lists :
   file-uploader :

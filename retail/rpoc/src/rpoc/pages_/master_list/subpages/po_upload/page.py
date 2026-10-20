@@ -15,104 +15,96 @@ def handle_po_upload_section(
     col : Any
 ) -> None : 
 
-    with col : 
-        
+    with col :
+
         st.subheader('Upload Purchase Order')
-        
+
+        mode : str = st.radio(
+            'PO Upload Mode' ,
+            [
+                'Upload New Invoice' ,
+                'Update Existing Invoice'
+            ] ,
+            horizontal = True ,
+            key = 'po_upload_mode'
+        )
+
+        selected_supplier : str | None = None
+
+        if mode == 'Update Existing Invoice' :
+
+            supplier_options : list[str] = sorted(
+                s for s in st.session_state.df.drop_nulls(
+                    subset = ['Supplier']
+                )['Supplier'].unique().to_list()
+                if isinstance(s , str) and s.strip()
+            )
+
+            if not supplier_options :
+
+                st.info('No suppliers found in the master list yet. Use "Upload New Invoice" instead.')
+
+            else :
+
+                selected_supplier = st.selectbox(
+                    'Supplier' ,
+                    supplier_options ,
+                    key = 'po_upload_supplier'
+                )
+
         po_files : list[Any] | None = st.file_uploader(
             'Upload Purchase Order (LLM)' ,
             accept_multiple_files = True ,
             key = 'po_upload'
         )
 
-        master_df : pl.DataFrame = st.session_state.df
+        extract_clicked : bool = st.button('Extract PO with LLM')
 
-        # * Supplier is deterministic : the user picks it from the master list so the
-        # * LLM never has to infer or output it during ingestion.
-        supplier_options : list[str] = []
+        if extract_clicked and mode == 'Update Existing Invoice' and not selected_supplier :
 
-        if 'Supplier' in master_df.columns and not master_df.is_empty() :
-            supplier_options = sorted(
-                s for s in master_df.get_column('Supplier').drop_nulls().unique().to_list()
-                if isinstance(s , str) and s.strip()
+            st.warning('Select a supplier first.')
+
+        elif extract_clicked and po_files :
+
+            all_new_data : list[dict[str , Any]] = []
+            total_files : int = len(po_files)
+
+            progress_bar : Any = st.progress(
+                0 ,
+                text = 'Starting PO processing...'
             )
 
-        if supplier_options :
-            selected_supplier : str = st.selectbox(
-                'Select Supplier' ,
-                options = supplier_options ,
-                key = 'po_supplier_select'
-            )
+            for idx , file in enumerate(po_files) :
 
-        else :
-            selected_supplier : str = st.text_input(
-                'Enter Supplier' ,
-                key = 'po_supplier_input' ,
-                help = 'No suppliers in the master list yet — type the supplier name.'
-            ).strip()
+                save_uploaded_file(file)
 
-        # * Surface how many known products will be sent as the canonical reference,
-        # * so it is obvious whether the LLM is being given the CSV to match against.
-        reference_count : int = 0
-
-        if selected_supplier and 'Supplier' in master_df.columns and not master_df.is_empty() :
-            reference_count = master_df.filter(
-                pl.col('Supplier').cast(pl.String).str.strip_chars().str.to_lowercase()
-                == selected_supplier.strip().lower()
-            ).height
-
-        if reference_count > 0 :
-            st.caption(f'📋 {reference_count} known products for "{selected_supplier}" will be sent to the LLM as the canonical reference.')
-
-        else :
-            st.caption(f'⚠️ No existing products recorded for "{selected_supplier}" — the LLM will read names directly from the document.')
-
-        if st.button('Extract PO with LLM') :
-
-            if not po_files :
-                st.warning('Please upload at least one purchase order file.')
-
-            elif not selected_supplier :
-                st.warning('Please select or enter a supplier first.')
-
-            else :
-
-                all_new_data : list[dict[str , Any]] = []
-                total_files : int = len(po_files)
-
-                progress_bar : Any = st.progress(
-                    0 ,
-                    text = 'Starting PO processing...'
+                extracted_data : list[dict[str , Any]] = process_document_with_llm(
+                    file ,
+                    st.session_state.prompts['ingestion'] ,
+                    st.session_state.openrouter_client ,
+                    selected_supplier ,
+                    st.session_state.df
                 )
 
-                for idx , file in enumerate(po_files) :
+                for row in extracted_data :
 
-                    save_uploaded_file(file)
+                    row['Filename'] = file.name
 
-                    extracted_data : list[dict[str , Any]] = process_document_with_llm(
-                        file ,
-                        st.session_state.prompts['ingestion'] ,
-                        st.session_state.openrouter_client ,
-                        selected_supplier ,
-                        master_df
-                    )
+                    if mode == 'Update Existing Invoice' and selected_supplier :
+                        row['Supplier'] = selected_supplier
 
-                    for row in extracted_data :
-
-                        row['Filename'] = file.name
-
-                    all_new_data.extend(extracted_data)
-
-                    current_step : int = idx + 1
-                    progress_percentage : float = current_step / total_files
-
-                    progress_bar.progress(
-                        progress_percentage ,
-                        text = f'Processed {current_step} of {total_files} POs'
-                    )
-
-                st.session_state.pending_po_data = all_new_data
-                progress_bar.empty()
+                all_new_data.extend(extracted_data)
+                
+                current_step : int = idx + 1
+                progress_percentage : float = current_step / total_files
+                
+                progress_bar.progress(
+                    progress_percentage , 
+                    text = f'Processed {current_step} of {total_files} POs'
+                )
+                
+            st.session_state.pending_po_data = all_new_data
+            progress_bar.empty()
 
 
 def handle_po_approval_section() -> None : 

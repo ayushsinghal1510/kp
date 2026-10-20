@@ -1,24 +1,81 @@
+import re
 import sys
+import difflib
 
 import polars as pl
-import pandas as pd 
+import pandas as pd
 import numpy as np
-import streamlit as st 
+import streamlit as st
+import markdown as md
+
 from fpdf import FPDF
 
 from io import StringIO
 
-def execute_code(code_str : str) -> tuple[bool , str | None , str | None] : 
+
+def fuzzy_filter(
+    frame : pl.DataFrame ,
+    column : str ,
+    query : str ,
+    cutoff : float = 0.6
+) -> pl.DataFrame :
+    """Return the rows of `frame` whose `column` fuzzily matches `query`.
+
+    Tolerant of casing, whitespace, extra words between tokens, and small
+    misspellings. Every whitespace-separated token in `query` must appear in the
+    cell value either as a substring OR as a close (edit-distance) match to one
+    of the cell's words. This handles both multi-word product names
+    (e.g. 'cadbury chocolate almond' -> 'CADBURY CHOCOLATE 120GM X 24 ... ALMOND')
+    and misspelled suppliers (e.g. 'bhavana' -> 'BHAVNA PTE LTD').
+    """
+
+    if column not in frame.columns :
+        return frame.clear()
+
+    q_tokens : list[str] = [t for t in re.split(r'\s+' , str(query).lower().strip()) if t]
+
+    if not q_tokens :
+        return frame
+
+    values : list = frame[column].to_list()
+
+    keep : list[bool] = []
+
+    for value in values :
+
+        text : str = ('' if value is None else str(value)).lower().strip()
+        words : list[str] = re.split(r'\s+' , text)
+
+        matched_all : bool = True
+
+        for token in q_tokens :
+
+            if token in text :
+                continue
+
+            if difflib.get_close_matches(token , words , n = 1 , cutoff = cutoff) :
+                continue
+
+            matched_all = False
+            break
+
+        keep.append(matched_all)
+
+    return frame.filter(pl.Series(keep))
+
+
+def execute_code(code_str : str) -> tuple[bool , str | None , str | None] :
 
     output : StringIO = StringIO()
     sys.stdout = output
 
     context = {
-        'pl' : pl , 
-        'pd' : pd , 
-        'np' : np , 
-        'st' : st , 
-        'df' : st.session_state.df 
+        'pl' : pl ,
+        'pd' : pd ,
+        'np' : np ,
+        'st' : st ,
+        'df' : st.session_state.df ,
+        'fuzzy_filter' : fuzzy_filter
     }
 
     try : 
@@ -38,14 +95,23 @@ def execute_code(code_str : str) -> tuple[bool , str | None , str | None] :
         sys.stdout = sys.__stdout__
 
 def create_pdf(text: str) -> bytes:
-    
+
+    # Core PDF fonts only cover latin-1 - normalize common "smart" punctuation
+    # to ASCII first, then replace anything else that still falls outside
+    # latin-1, so write_html() below never sees an unsupported character.
+    clean : str = text.replace('’' , "'").replace('‘' , "'")
+    clean = clean.replace('“' , '"').replace('”' , '"')
+    clean = clean.replace('–' , '-').replace('—' , '-')
+    clean = clean.encode('latin-1' , 'replace').decode('latin-1')
+
+    html : str = md.markdown(
+        clean ,
+        extensions = ['tables' , 'fenced_code' , 'nl2br']
+    )
+
     pdf: FPDF = FPDF()
     pdf.add_page()
-    pdf.set_font("Arial", size=12)
-    
-    pdf.multi_cell(
-        0, 10,
-        txt=text.encode('latin-1', 'replace').decode('latin-1')
-    )
-    
-    return pdf.output(dest='S').encode('latin-1')
+    pdf.set_font("Helvetica", size=12)
+    pdf.write_html(html)
+
+    return bytes(pdf.output())

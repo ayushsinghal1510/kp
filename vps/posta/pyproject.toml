@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.135.1",
+    "google-genai>=1.46.0",
     "jwcrypto>=1.5.6",
     "pymongo>=4.16.0",
     "python-dotenv>=1.2.2",

@@ -83,13 +83,13 @@ def handle_data_agent_chat() -> None :
         retries : int = 0
         final_response : str | None = None
 
-        with st.chat_message('assistant') : 
+        with st.chat_message('assistant') :
 
             status_placeholder : Any = st.empty()
 
-            with st.spinner('Agent is working...') : 
+            with st.spinner('Agent is working...') :
 
-                while retries < 3 : 
+                while retries < 3 :
 
                     status_placeholder.write(f'Thinking... (Attempt {retries + 1}/3)')
 
@@ -100,33 +100,37 @@ def handle_data_agent_chat() -> None :
                     res : Any = st.session_state.groq_client.chat.completions.create(
                         messages = [
                             {
-                                'role' : 'system' , 
+                                'role' : 'system' ,
                                 'content' : st.session_state.prompts['coder'].format(
                                     columns = list(
                                         st.session_state.df.columns
-                                    ) , 
-                                    history = history_ctx , 
-                                    prompt = prompt , 
-                                    fuzzy_hint = fuzzy_hint , 
+                                    ) ,
+                                    history = history_ctx ,
+                                    prompt = prompt ,
+                                    fuzzy_hint = fuzzy_hint ,
                                     chain_rules = st.session_state.prompts['chain-rules']
                                 )
                             }
-                        ] , 
+                        ] ,
                         **st.session_state.chatbot_config['coder-model']
                     )
 
+                    raw_content : str = res.choices[0].message.content or ''
+
+                    # Tolerant fence: optional 'python' tag, optional space/newline, optional
+                    # trailing newline before the closing fence. Falls back to any ``` block.
                     code_match : Match | None = re.search(
-                        r'```python\n(.*?)\n```' , 
-                        res.choices[0].message.content , 
-                        re.DOTALL
+                        r'```[ \t]*(?:python|py)?[ \t]*\r?\n(.*?)```' ,
+                        raw_content ,
+                        re.DOTALL | re.IGNORECASE
                     )
 
-                    if not code_match : 
+                    if not code_match :
 
                         retries += 1
                         continue
 
-                    code : str = code_match.group(1)
+                    code : str = code_match.group(1).strip()
 
                     run_ok : bool
                     out : str
@@ -134,29 +138,29 @@ def handle_data_agent_chat() -> None :
 
                     run_ok , out , err = execute_code(code)
 
-                    if not run_ok : 
+                    if not run_ok :
 
                         status_placeholder.warning(f'Code Error on attempt {retries + 1}. Retrying...')
 
                     rev_res : Any = st.session_state.groq_client.chat.completions.create(
                         messages = [
                             {
-                                'role' : 'user' , 
+                                'role' : 'user' ,
                                 'content' : st.session_state.prompts['review'].format(
-                                    prompt = prompt , 
+                                    prompt = prompt ,
                                     result = out if run_ok else err
                                 )
                             }
-                        ] , 
+                        ] ,
                         **st.session_state.chatbot_config['rev-model']
                     )
 
                     decision : str = rev_res.choices[0].message.content
 
-                    if 'RETRY' in decision : 
+                    if 'RETRY' in decision :
                         retries += 1
 
-                    else : 
+                    else :
 
                         final_response = decision.replace('SUCCESS:' , '').strip()
 
@@ -164,8 +168,8 @@ def handle_data_agent_chat() -> None :
 
                 status_placeholder.empty()
 
-                if not final_response : 
-                    final_response = 'I couldn\'t update the data. Please check the product name.'
+                if not final_response :
+                    final_response = 'I couldn\'t answer that. Please check the product name and try again.'
 
             st.markdown(final_response)
 

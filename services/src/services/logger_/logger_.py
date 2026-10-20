@@ -40,26 +40,26 @@ class ColoredFormatter(Formatter) :
         return formatter.format(record)
 
 def load_logger(config : dict) -> Logger:
-    
+
     logger: Logger = getLogger(__name__)
-    # logger.setLevel(DEBUG) 
+    logger.setLevel(DEBUG)
 
-    # if logger.handlers : 
+    if logger.handlers :
 
-    #     for handler in logger.handlers : logger.removeHandler(handler)
+        for handler in list(logger.handlers) : logger.removeHandler(handler)
 
-    # console_handler = StreamHandler()
+    console_handler = StreamHandler()
 
-    # log_format = config['log-format']
+    log_format = config['log-format']
 
-    # formatter = ColoredFormatter(
-    #     fmt = log_format , 
-    #     config = config , 
-    #     datefmt = ''
-    # )
-    # console_handler.setFormatter(formatter)
+    formatter = ColoredFormatter(
+        fmt = log_format ,
+        config = config ,
+        datefmt = config.get('date-format' , '')
+    )
+    console_handler.setFormatter(formatter)
 
-    # logger.addHandler(console_handler)
+    logger.addHandler(console_handler)
 
     return logger
 

@@ -1,0 +1,17 @@
+{
+  "scenario_id": "000000000000000000000abc",
+  "session_id": "sess-abc-123",
+  "user_id": "student-42",
+  "transcription": [
+    {"role": "user", "content": "Good morning Mr Sharma, what brings you in today?"},
+    {"role": "assistant", "content": "My right shoulder has been aching for about three months."},
+    {"role": "user", "content": "Did it start after any injury or fall?"},
+    {"role": "assistant", "content": "No, no injury, it just crept up on me."},
+    {"role": "user", "content": "Anything that makes it worse? How are you sleeping?"},
+    {"role": "assistant", "content": "Reaching overhead to write on the board. It wakes me if I lie on that side."},
+    {"role": "user", "content": "Can you lift your arm out to the side for me?"},
+    {"role": "assistant", "content": "It hurts partway up, then eases near the top."},
+    {"role": "user", "content": "That painful arc with your night pain points to a rotator cuff impingement rather than a frozen shoulder. Physiotherapy should settle it and you can keep teaching."},
+    {"role": "assistant", "content": "That is a relief, thank you doctor."}
+  ]
+}

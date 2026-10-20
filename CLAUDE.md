@@ -2,55 +2,77 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Overview
+## What this is
 
-`kp` is a **uv workspace monorepo** (Python ≥ 3.13, `uv_build` backend) bundling several independent apps for two domains plus a shared library. The root package itself is a stub; real code lives in the workspace members declared in `pyproject.toml`:
+`kp` is a **uv workspace** monorepo holding several unrelated Python 3.13 projects. The root
+package (`src/kp`) is an empty placeholder — all real code lives in the workspace members declared
+in the root `pyproject.toml`:
 
-| Member                     | Kind      | Purpose                                                                                                                                                               | Port |
-| -------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- |
-| `vps/server`               | FastAPI   | Voice scenario creation/editing — Gemini generates a scenario prompt, pushes a workflow to the Voxio API (`database.voxio.in`), persists to MongoDB.                  | 8888 |
-| `vps/posta`                | FastAPI   | Decrypts a JWE session token, pulls session data from Voxio chat API, writes transcription/feedback/score back into MongoDB (`students`/`scenarios`/`sessions`).      | 8000 |
-| `retail/rpoc`              | Streamlit | Retail purchase-order / master-list app: upload supplier price lists & PO images, an LLM "data agent" chatbot, ordering lists, orders, purchases. The largest member. | 8501 |
-| `retail/mt`                | Streamlit | Tiny utility to POST a JWE token to a configured URL and view the response.                                                                                           | —    |
-| `benchmarking/vpsb/postab` | FastAPI   | Benchmarking stub for posta (echoes posted JSON).                                                                                                                     | 9999 |
-| `services`                 | Library   | Shared code: colored logger, env-string parsers, Gemini chat helpers. Imported as `from services import ...`.                                                         | —    |
+| Member | Kind | Entry point | Purpose |
+| --- | --- | --- | --- |
+| `vps/server` | FastAPI (port 8888) | `server.app:main` | Voxio scenario CRUD: Gemini generates a scenario prompt, injects it into a workflow JSON, POSTs/PUTs it to `database.voxio.in`, mirrors it in MongoDB |
+| `vps/posta` | FastAPI (port 8000) | `posta.app:main` | Post-session hook: decrypts a JWE header token, pulls session data from `chat.voxio.in`, writes a session doc and back-links it onto the student and scenario docs |
+| `benchmarking/vpsb/postab` | Streamlit | `postab:main` | Trivial manual tester for `posta` — paste a JWE token, POST it at the URL in `config.yml` |
+| `retail/rpoc` | Streamlit | `rpoc:main` | Large retail price/PO app for Tian Ma Group. **Has its own `CLAUDE.md` — read it before touching this subtree.** |
+| `retail/mt` | FastAPI (port 9999) | `mt.app:main` | Skeleton webhook receiver; only logs request bodies |
+| `services` | library | — | Shared helpers imported as `from services import ...` by `posta` and `mt` |
 
-`vps/*` (Voice Practice/Scenario) and `retail/*` are unrelated product lines that happen to share this repo and the `services` package.
+## Commands
 
-## Running
-
-Each member must be run **from its own directory** — `config.yml` and all `assets/` paths in the code are relative to the member root (see the `nohup.out` error from running rpoc at the repo root).
-
-```sh
-# FastAPI members (entry points defined in their pyproject [project.scripts])
-cd vps/server && uv run server     # also: posta, postab
-cd vps/posta  && uv run posta
-
-# Streamlit members (no usable main(); launch the app module directly)
-cd retail/rpoc && uv run streamlit run src/rpoc/app.py
-cd retail/mt   && uv run streamlit run src/mt/app.py
+```bash
+uv sync                       # install the whole workspace from the root
+uv run <script>               # server | posta | postab | rpoc | mt
 ```
 
-`uv sync` resolves the whole workspace from the root `uv.lock`. There is **no test suite, linter, or formatter** configured.
+**Always run a member from its own directory**, not the repo root: every app loads `config.yml`,
+`assets/…` and prompt files by relative path (`open('config.yml')`), so the CWD must be the member
+dir. E.g. `cd vps/server && uv run server`.
 
-## Configuration & secrets
+There are no tests, linter, or formatter configured anywhere in this repo.
 
-- Every app calls `load_dotenv()` and reads secrets directly from `os.environ` (e.g. `GROQ_API_KEY`, `GEMINI_API_KEY`, `DEEPGRAM_API_KEY`, `MONGO_URL`, `VOXIO_API_KEY`, `JWE_SECRET`, CORS `ALLOWED_*`). Missing keys crash at startup/import. `.env` files are gitignored.
-- Non-secret settings live in each member's `config.yml` (loaded via `yaml.safe_load`): model names, prompt/asset paths, MongoDB db/collection names, Streamlit widget kwargs. Prompts are markdown files under `assets/prompts/` and are read at load time.
+Each app calls `load_dotenv()` and reads a `.env` in its own directory. Env vars in use:
+`MONGO_URL`, `GEMINI_API_KEY`, `DEEPGRAM_API_KEY`, `VOXIO_API_KEY`, `ALLOWED_ORIGINS`,
+`ALLOWED_CREDENTIALS`, `ALLOWED_METHODS`, `ALLOWED_HEADERS` (server); `MONGO_URL`, `JWE_SECRET`
+(posta). `rpoc` additionally needs `GROQ_API_KEY`.
 
-## Architecture notes
+Note `retail/rpoc` carries its own `uv.lock` and is also usable standalone; the root `uv.lock`
+covers the workspace.
 
-**`services` shared package** — Members that depend on it declare `services = { workspace = true }` under `[tool.uv.sources]` and import top-level names (`load_config`, `load_logger`, `env_str_to_list`, `env_str_to_bool`, `json_to_google_chat`, `create_generation_config`). Note `vps/server` carries its **own copy** of these helpers (in `src/server/services/` and `src/server/loader/`) rather than depending on the `services` package — keep the two in sync if you touch shared logic.
+## Shared architectural pattern
 
-**FastAPI members** follow one shape: a `loader/` builds all external clients (Mongo, Gemini, Deepgram) + logger + config and returns them as a tuple; an `AppState` holds them; a `lifespan` async context manager populates `AppState` on startup; route handlers live in `routers/` (server) or inline in `app.py` (posta). Gemini calls go through `llm/runner.py`: `run_json_gemini` streams text then strips ` ``` ` / `json` fences and `ast.literal_eval`s it into a dict, retrying once and falling back to a canned error dict — so prompts must return Python-literal-parseable JSON-ish text, not strict JSON.
+The FastAPI members are deliberately near-identical in shape — copy that shape when adding one:
 
-**`retail/rpoc`** is a multi-page Streamlit app. `app.py` wires `st.navigation` over the `src/rpoc/pages_/` tree (master*list, chatbot, ordering_lists, orders, purchase), each page folder using a `page.py` + `services*.py`split. All state is bootstrapped once by`load*session_state()` (`services/state*.py`) into `st.session_state`— clients, parsed config sections, prompt strings, and the working **Polars** DataFrame loaded from the CSV at`config['main']['path']['csv']`.
+1. `state_.py` / `state/` defines a plain `AppState` class of typed attributes (config, logger,
+   clients, Mongo collections).
+2. `loader/` has one `load_*` function per external client plus a `load_all_clients()` /
+   `load_clients()` that returns them as a tuple.
+3. `app.py` wires them in an `asynccontextmanager` `lifespan`, assigns them onto a module-level
+   `state` singleton, adds permissive CORS, defines routes inline, and exposes
+   `def main() : uvicorn.run(app, host='0.0.0.0', port=…)`.
+4. Routes stay thin-ish; heavier logic goes in `routers/`, `llm/`, `services/`.
 
-The chatbot (`pages_/chatbot/chatbot_.py`) is a **coder→reviewer retry loop**: a Groq LLM (`coder` prompt) emits a ` ```python ` block of Polars code; `execute_code` (`services/services_.py`) `exec()`s it with `df` in scope, writes the mutated `df` back to the CSV, and a second Groq call (`review` prompt) returns `SUCCESS:`/`RETRY` to decide whether to accept or retry (max 3). Fuzzy product-name matching seeds hints into the coder prompt. Editing the LLM behavior means editing the markdown prompts in `assets/prompts/`, not Python.
+`config.yml` (never checked-in secrets) holds per-feature sub-dicts — prompt paths, model names,
+Mongo database/collection names, logger colors — and is passed down as `config['<feature>']`
+rather than read again deeper in the stack.
 
-## Code style
+**`services/` is the intended home for shared code, but is only partly adopted.** `vps/server`
+still carries its own private copies of `load_config`, `load_logger`, `ColoredFormatter`,
+`env_str_to_bool`, `env_str_to_list` in `loader/loader.py` and `services/`, while `posta` and `mt`
+import them from `services`. Also note `services.load_logger` is currently gutted — its body is
+commented out and it returns a bare unconfigured logger, so log formatting there differs from
+`server`'s working copy.
 
-The codebase has a distinctive, consistent style — match it: spaces around `:` and `=` even in annotations/calls (`def f(x : int = 0)`), heavy explicit type annotations, and one-liner `if cond : ...` / `else : ...` and single-expression function bodies on the same line. Mirror the surrounding file rather than reformatting to PEP 8.
+## Conventions
+
+- **Idiosyncratic code style, used consistently across every member**: spaces around colons in
+  annotations and dict literals (`key : value`, `x : int`), one-argument-per-line call sites with
+  the trailing ` , `, single-line `if cond : return x` bodies, and one-line
+  `def f() : do_thing()`. Match it.
+- Trailing-underscore module names (`state_.py`, `logger_.py`, `general_.py`, `services_.py`) mark
+  the implementation file inside a package directory; the package `__init__.py` re-exports with
+  `from .x_ import *`.
+- Comment markers in use: `# *` for explanatory notes, `# !` for TODO/warning.
+- Type hints are used on signatures and even on local variables (`config : dict = ...`).
 
 # Writitng convention :
 
