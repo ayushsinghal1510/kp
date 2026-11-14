@@ -7,7 +7,7 @@ import streamlit as st
 
 from typing import Any
 
-from .services_ import process_document_with_llm
+from .services_ import process_document_with_llm , suggest_master_matches
 from ..services_ import sanitize_dataframe_for_polars , normalize_string , save_uploaded_file
 
 
@@ -173,11 +173,42 @@ def handle_po_approval_section() -> None :
         inplace = True
     )
 
-    pending_filenames : pd.DataFrame = pending_df[[
-        'Match Product Name' , 
-        'Match Supplier' , 
-        'Filename'
-    ]].copy()
+    # * Suggest which existing master product each invoice line is (barcode ->
+    # * same name -> close name + packing size + price). The user confirms or
+    # * changes it in the 'Match To' column ; current prices are looked up by it.
+    pending_df['Match To'] = suggest_master_matches(
+        pending_df.to_dict('records') ,
+        st.session_state.df
+    )
+
+    # * Re-apply 'Match To' picks the user already made in the editor so the
+    # * Current price columns follow a manual pick on the next rerun.
+    editor_state : Any = st.session_state.get('po_approval_editor')
+
+    if isinstance(editor_state , dict) :
+
+        for row_pos , changes in editor_state.get('edited_rows' , {}).items() :
+
+            if 'Match To' in changes and int(row_pos) < len(pending_df) :
+
+                pending_df.iloc[
+                    int(row_pos) ,
+                    pending_df.columns.get_loc('Match To')
+                ] = changes['Match To'] or ''
+
+    pending_df['Match Product Name'] = pd.Series(
+        np.where(
+            pending_df['Match To'] != '' ,
+            pending_df['Match To'] ,
+            pending_df['Product Name']
+        ) ,
+        index = pending_df.index
+    ).astype(str).str.replace(r'\s+' , ' ' , regex = True).str.strip().str.lower()
+
+    for carry_col in ['Barcode' , 'Filename'] :
+
+        if carry_col not in pending_df.columns :
+            pending_df[carry_col] = ''
 
     if 'Packing Size' not in pending_df.columns : 
         
@@ -275,9 +306,10 @@ def handle_po_approval_section() -> None :
     )
     
     display_cols : list[str] = [
-        'Approve' , 
-        'Product Name' , 
-        'Supplier' , 
+        'Approve' ,
+        'Product Name' ,
+        'Match To' ,
+        'Supplier' ,
         'Current Packing Size' , 
         'Incoming Packing Size' , 
         'Current Packing Price' , 
@@ -294,7 +326,20 @@ def handle_po_approval_section() -> None :
             
             merged_df[c] = None
 
-    styled_merged_df : Any = merged_df[display_cols].style.map(
+    # * Barcode / Filename ride along hidden (column_order) so they reach the commit.
+    hidden_cols : list[str] = ['Barcode' , 'Filename']
+
+    pending_suppliers : set[str] = set(merged_df['Supplier'].astype(str).str.strip().str.lower())
+
+    match_options : list[str] = [''] + sorted(
+        str(name) for name , sup in zip(
+            st.session_state.df['Product Name'].to_list() ,
+            st.session_state.df['Supplier'].to_list()
+        )
+        if name is not None and str(sup).strip().lower() in pending_suppliers
+    )
+
+    styled_merged_df : Any = merged_df[display_cols + hidden_cols].style.map(
         lambda _ : 'background-color : #6496fa26' , 
         subset = [
             'Current Packing Size' , 
@@ -320,11 +365,24 @@ def handle_po_approval_section() -> None :
         ]
     )
 
+    st.caption(
+        '**Match To** = the existing master product this invoice line updates '
+        '(auto-suggested ; pick another or clear it to add the line as a new product).'
+    )
+
     edited_pending_df : pd.DataFrame = st.data_editor(
-        styled_merged_df , 
-        use_container_width = True , 
-        num_rows = 'dynamic' , 
-        key = 'po_approval_editor'
+        styled_merged_df ,
+        use_container_width = True ,
+        num_rows = 'dynamic' ,
+        key = 'po_approval_editor' ,
+        column_order = display_cols ,
+        column_config = {
+            'Match To' : st.column_config.SelectboxColumn(
+                'Match To' ,
+                options = match_options ,
+                help = 'Existing product this line updates. Blank = add as new product.'
+            )
+        }
     )
     
     if st.button('Confirm Approved Rows') : 
@@ -355,20 +413,43 @@ def handle_po_approval_section() -> None :
                 inplace = True
             )
 
-            approved_df['Match Product Name'] = approved_df['Product Name'].apply(normalize_string).str.lower()
-            approved_df['Match Supplier'] = approved_df['Supplier'].apply(normalize_string).str.lower()
-            
+            # * A confirmed 'Match To' makes this line update that existing master
+            # * row (its name is kept) instead of being added as a new product.
+            match_to : pd.Series = approved_df['Match To'].fillna('').astype(str).str.strip()
+
+            approved_df['Product Name'] = np.where(
+                match_to != '' ,
+                match_to ,
+                approved_df['Product Name']
+            )
+
+            approved_df.drop(
+                columns = ['Match To'] ,
+                inplace = True
+            )
+
+            # * Empty barcode must not blank out an existing one in the coalesce below.
+            approved_df['Barcode'] = approved_df['Barcode'].replace('' , None)
+
+            approved_df['Match Product Name'] = approved_df['Product Name'].astype(str).str.replace(r'\s+' , ' ' , regex = True).str.strip().str.lower()
+            approved_df['Match Supplier'] = approved_df['Supplier'].astype(str).str.replace(r'\s+' , ' ' , regex = True).str.strip().str.lower()
+
+            duplicate_mask : pd.Series = approved_df.duplicated(
+                subset = ['Match Product Name' , 'Match Supplier'] ,
+                keep = 'first'
+            )
+
+            if duplicate_mask.any() :
+
+                st.warning(
+                    'These lines point at the same product as an earlier line and were skipped : '
+                    + ' , '.join(approved_df.loc[duplicate_mask , 'Product Name'].astype(str))
+                )
+
+                approved_df = approved_df[~duplicate_mask]
+
             approved_df['Discount'] = 0.0
 
-            approved_df = approved_df.merge(
-                pending_filenames , 
-                on = [
-                    'Match Product Name' , 
-                    'Match Supplier'
-                ] , 
-                how = 'left'
-            )
-            
             master_pl_df : pl.DataFrame = st.session_state.df
 
             new_pl_df : pl.DataFrame = pl.from_pandas(approved_df)
@@ -390,13 +471,13 @@ def handle_po_approval_section() -> None :
                     )
 
             master_pl_df = master_pl_df.with_columns([
-                pl.col('Product Name').str.to_lowercase().alias('Match Product Name'),
-                pl.col('Supplier').str.to_lowercase().alias('Match Supplier')
+                pl.col('Product Name').str.replace_all(r'\s+' , ' ').str.strip_chars().str.to_lowercase().alias('Match Product Name'),
+                pl.col('Supplier').str.replace_all(r'\s+' , ' ').str.strip_chars().str.to_lowercase().alias('Match Supplier')
             ])
 
             new_pl_df = new_pl_df.with_columns([
-                pl.col('Product Name').str.to_lowercase().alias('Match Product Name'),
-                pl.col('Supplier').str.to_lowercase().alias('Match Supplier')
+                pl.col('Product Name').str.replace_all(r'\s+' , ' ').str.strip_chars().str.to_lowercase().alias('Match Product Name'),
+                pl.col('Supplier').str.replace_all(r'\s+' , ' ').str.strip_chars().str.to_lowercase().alias('Match Supplier')
             ])
             
             standard_cols : list[str] = [

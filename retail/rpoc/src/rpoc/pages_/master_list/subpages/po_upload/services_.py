@@ -1,4 +1,5 @@
 import re
+import difflib
 import json
 import base64
 import time
@@ -63,9 +64,10 @@ def _build_known_products_block(
 
     supplier_rows = supplier_rows.select(reference_cols).unique()
 
-    # * Send the FULL catalogue for this supplier so every invoice line can be
-    # * reconciled to its existing master name (a random sample left most names
-    # * unanchored and re-uploads came through as new products).
+    # * Send the FULL catalogue as a packing-size reference only. Names stay
+    # * verbatim from the document ; asking the LLM to reuse master names made it
+    # * blend names (e.g. a Lexus line renamed to a Julies product). Matching to
+    # * existing products is done in code by suggest_master_matches().
     product_lines : list[str] = []
 
     for record in supplier_rows.iter_rows(named = True) :
@@ -90,19 +92,14 @@ def _build_known_products_block(
         return ''
 
     return (
-        f'### ⚠️ READ THIS FIRST — EXISTING PRODUCTS FOR "{supplier}"\n'
-        f'Below is the COMPLETE list of this supplier\'s products already recorded in '
+        f'### REFERENCE — EXISTING PRODUCTS FOR "{supplier}"\n'
+        f'Below is the complete list of this supplier\'s products already recorded in '
         f'our system, one per line as "<Product Name> | Packing Size : <root packing '
-        f'size>". The document may name the same product differently (abbreviations, '
-        f'missing sizes, brand prefixes, punctuation) — e.g. "MAMEE MONSTER F/P HOT & '
-        f'SPICY" may be recorded as "MAMEE MONSTER H&S 25Gx10". The document may also '
-        f'contain products that are not in this list — extract those too.\n'
-        f'1. NAMING : For EVERY document item, check this list first. When an item is '
-        f'the same product as one listed here (same brand, variant/flavour and size), '
-        f'output that Product Name EXACTLY as written (character for character) so it '
-        f'reconciles with the existing record. Only when no listed product matches, '
-        f'extract it as a new product named in the SAME naming pattern/style shown here. '
-        f'Do not force a match between products of different variants or sizes.\n'
+        f'size>". It is REFERENCE ONLY.\n'
+        f'1. NAMING : Do NOT copy, borrow or blend names from this list. Every '
+        f'`Product Name` MUST follow the PRODUCT NAME — VERBATIM rules below, taken '
+        f'only from the document itself. Matching to existing products is done by '
+        f'the system afterwards, not by you.\n'
         f'2. PACKING SIZE CONVENTION : The same written notation can mean different '
         f'root packing sizes for different suppliers (e.g. "2x4" may be a root '
         f'packing size of 2 for one supplier but 8 for another). Infer how THIS '
@@ -112,9 +109,9 @@ def _build_known_products_block(
         f'3. Each product may appear in the output AT MOST ONCE.\n\n'
         f'EXISTING PRODUCTS :\n'
         + '\n'.join(product_lines)
-        + '\n\n--- END OF EXISTING PRODUCTS. Reuse these exact names for matching '
-        + 'items ; still extract every product in the document, including ones not '
-        + 'listed above. ---\n'
+        + '\n\n--- END OF REFERENCE. Use it only for the packing-size convention ; '
+        + 'names come verbatim from the document. Extract every product in the '
+        + 'document. ---\n'
     )
 
 
@@ -728,3 +725,178 @@ def process_document_with_llm(
         st.error(f'Document processing pipeline failed : {e}')
 
         return []
+
+def _match_key(text : Any) -> str :
+
+    # * Loose comparison key : lowercase, letters / digits only.
+    return re.sub(r'[^a-z0-9]' , '' , str(text or '').lower())
+
+
+def _name_tokens(text : Any) -> list[str] :
+
+    # * Words of the name without packing / weight tokens (12X276G , 8(6X79G) , 360G)
+    # * so "MUNCHY'S WHEAT CRACKERS 12X276G" -> [munchys , wheat , crackers].
+    words : list[str] = re.findall(r'[a-z0-9]+' , str(text or '').lower().replace("'" , ''))
+
+    return [w for w in words if not re.search(r'\d' , w)]
+
+
+def _is_subsequence(short : str , long : str) -> bool :
+
+    chars : Any = iter(long)
+
+    return all(c in chars for c in short)
+
+
+def _token_match(a : str , b : str) -> float :
+
+    if a == b or a.rstrip('s') == b.rstrip('s') :
+        return 1.0
+
+    # * Initials : H&S ~ HOT & SPICY (one side a single letter).
+    if (len(a) == 1) != (len(b) == 1) :
+        return 0.8 if a[0] == b[0] else 0.0
+
+    if len(a) == 1 or len(b) == 1 :
+        return 0.0
+
+    short , long = sorted((a.rstrip('s') , b.rstrip('s')) , key = len)
+
+    # * Abbreviations : CRK / CRKS ~ CRACKER , PNUT ~ PEANUT , SWICH ~ SANDWICH.
+    if len(short) >= 3 and short[0] == long[0] and _is_subsequence(short , long) :
+        return 0.8
+
+    if difflib.SequenceMatcher(None , a , b).ratio() >= 0.85 :
+        return 0.8
+
+    return 0.0
+
+
+def _coverage(a : list[str] , b : list[str]) -> float :
+
+    if not a or not b :
+        return 0.0
+
+    return sum(max(_token_match(t , o) for o in b) for t in a) / len(a)
+
+
+def _name_similarity(a : list[str] , b : list[str]) -> float :
+
+    # * Both names must explain each other : "MAMEE PREMIUM CURRY NOODLE" fully
+    # * contains "MAMEE CURRY" but half its own words are unexplained -> low.
+    if not a or not b :
+        return 0.0
+
+    # * Brand guard : the leading word (brand) of one name must appear in the
+    # * other — LEXUS VEGETABLE ~ MUNCHYS LEXUS CRKS VEGETABLE is fine , but
+    # * LEXUS PEANUT BUTTER must never match JULIES PNUT BUTTER.
+    if (
+        max(_token_match(a[0] , o) for o in b) < 1.0 and
+        max(_token_match(b[0] , o) for o in a) < 1.0
+    ) :
+        return 0.0
+
+    return min(_coverage(a , b) , _coverage(b , a))
+
+
+def suggest_master_matches(
+    pending_rows : list[dict[str , Any]] ,
+    master_df : pl.DataFrame
+) -> list[str] :
+
+    '''
+    For each pending invoice row return the Product Name of the existing master row
+    (same supplier) it most likely is, or '' when there is no confident match.
+
+    Order of evidence : identical barcode -> identical loose name -> scored
+    candidate (name words + same packing size + same pack price). Each master
+    row is suggested at most once. These are SUGGESTIONS shown in the review
+    table ; the user confirms or changes them before anything is written.
+    '''
+
+    suggestions : list[str] = [''] * len(pending_rows)
+
+    if master_df is None or master_df.is_empty() :
+        return suggestions
+
+    master_records : list[dict[str , Any]] = master_df.select(
+        [c for c in ['Barcode' , 'Product Name' , 'Packing Size' , 'Pack Price' , 'Supplier'] if c in master_df.columns]
+    ).to_dicts()
+
+    used : set[tuple[str , str]] = set()
+
+    def _num(value : Any) -> float :
+        try :
+            return float(value)
+        except (TypeError , ValueError) :
+            return 0.0
+
+    for index , row in enumerate(pending_rows) :
+
+        supplier_key : str = _match_key(row.get('Supplier'))
+
+        candidates : list[dict[str , Any]] = [
+            m for m in master_records
+            if _match_key(m.get('Supplier')) == supplier_key
+            and (supplier_key , _match_key(m.get('Product Name'))) not in used
+        ]
+
+        if not candidates :
+            continue
+
+        best : dict[str , Any] | None = None
+
+        barcode : str = re.sub(r'\D' , '' , str(row.get('Barcode') or ''))
+
+        if barcode :
+            best = next(
+                (m for m in candidates if re.sub(r'\D' , '' , str(m.get('Barcode') or '')).endswith(barcode[-12 :])
+                 and str(m.get('Barcode') or '').strip()) ,
+                None
+            )
+
+        if best is None :
+            name_key : str = _match_key(row.get('Product Name'))
+            best = next(
+                (m for m in candidates if _match_key(m.get('Product Name')) == name_key) ,
+                None
+            )
+
+        if best is None :
+
+            row_tokens : list[str] = _name_tokens(row.get('Product Name'))
+            row_size : float = _num(row.get('Packing Size'))
+            row_price : float = _num(row.get('Pack Price'))
+
+            best_score : float = 0.0
+
+            for m in candidates :
+
+                name_score : float = _name_similarity(row_tokens , _name_tokens(m.get('Product Name')))
+
+                same_size : bool = row_size > 0 and _num(m.get('Packing Size')) == row_size
+
+                master_price : float = _num(m.get('Pack Price'))
+                same_price : bool = (
+                    row_price > 0 and master_price > 0 and
+                    abs(master_price - row_price) <= 0.01 * max(master_price , row_price)
+                )
+
+                # * Name must carry real weight on its own ; size / price only
+                # * break ties and lift borderline name matches.
+                if name_score < 0.6 :
+                    continue
+
+                score : float = name_score + (0.15 if same_size else 0.0) + (0.2 if same_price else 0.0)
+
+                if score > best_score :
+                    best_score , best = score , m
+
+            if best_score < 0.85 :
+                best = None
+
+        if best is not None :
+            suggestions[index] = str(best.get('Product Name'))
+            used.add((supplier_key , _match_key(best.get('Product Name'))))
+
+    return suggestions
