@@ -185,7 +185,7 @@ Adjusted Pack Price = 1,944.00 / (24 + 2) = 1,944.00 / 26 = 74.77
 Example 2:
 Barcode 100474283, Paid Qty = 12, FOC Qty = 1, Total Value = 604.44
 Adjusted Pack Price = 604.44 / (12 + 1) = 604.44 / 13 = 46.50
-IMPORTANT: If a product has NO 0.00 duplicate row, no FOC adjustment is made. Use Pack Price = U/Price × Packing Size as normal.
+IMPORTANT: If a product has NO 0.00 duplicate row, no FOC adjustment is made. Compute Pack Price as normal per Section 2 (which checks Section 4 supplier overrides FIRST — CTN_AS_PRINTED suppliers are never multiplied by Packing Size).
 
 ---
 
@@ -203,7 +203,10 @@ If you see rate column, its packing price only
 
 * **CRITICAL MANDATE:** You are strictly forbidden from looking at the "Total" or "Total RM" columns to calculate or cross-verify prices. Do NOT reverse-engineer prices using row totals or overall quantities.
 * **DISCOUNTS & FOC:** Assume all discounts are 0%. Completely ignore dicsount based columns, the current discount is 0, FOC is there, but the current discount is always 0.
-* **THE ONLY VALID PRICE FORMULA:** Locate the raw, single unit price printed in the "U/ Price" or "Unit Price" column.
+* **STEP 0 — CHECK SECTION 4 FIRST (MANDATORY, BEFORE ANY PRICE MATH):** Look up the supplier in Table 4.1 (Section 4 below). If its Price Basis is **CTN_AS_PRINTED** (e.g. TGS GROUP SDN BHD, POKKA), then `Pack Price = the printed U/Price exactly as printed` — **do NOT multiply by Packing Size**, and SKIP the formula below entirely. If it is **UOM_CONDITIONAL**, follow Rule 4.2. ONLY when the supplier is NOT listed in Section 4 do you use the formula below.
+  * WRONG (TGS): U.PRICE 11.500, Packing Size 8 -> Pack Price 92.00 (multiplied — FORBIDDEN for CTN_AS_PRINTED suppliers)
+  * CORRECT (TGS): U.PRICE 11.500 -> Pack Price **11.50**
+* **GENERAL FORMULA (only for suppliers NOT listed in Section 4):** Locate the raw, single unit price printed in the "U/ Price" or "Unit Price" column.
 * `Pack Price = [U/ Price Column Value] * [Packing Size]`
 * **Example:** If "U/ Price" is visually printed as 12.31000 and "Packing Size" is extracted as 3, the calculation MUST be exactly: 12.31 * 3 = 36.93.
 * Do not adjust, do not slice, do not round intermediate states, and do not use any hidden values. Use exactly what your eyes see in the unit price field.* *Note:* Use the raw, undiscounted Unit Price to find the "Stated Pack Price" before applying this formula.* *Example:* A supplier lists a product at a CTN Price of $10. The buyer purchases 10 CTNs ($100 total value) and receives 1 extra CTN for free (1 FOC). The adjusted Pack Price is calculated as `$100 / (10 + 1) = $9.09`.

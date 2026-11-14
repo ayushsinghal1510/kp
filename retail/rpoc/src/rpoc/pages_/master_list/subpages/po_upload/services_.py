@@ -63,15 +63,9 @@ def _build_known_products_block(
 
     supplier_rows = supplier_rows.select(reference_cols).unique()
 
-    # * Send up to 20 products as a REFERENCE SAMPLE so the LLM can learn this
-    # * supplier's naming style and packing-size convention — not as the complete
-    # * catalogue. If the supplier has more, send a random sample of 20.
-    if supplier_rows.height > 20 :
-        supplier_rows = supplier_rows.sample(
-            n = 20 ,
-            shuffle = True
-        )
-
+    # * Send the FULL catalogue for this supplier so every invoice line can be
+    # * reconciled to its existing master name (a random sample left most names
+    # * unanchored and re-uploads came through as new products).
     product_lines : list[str] = []
 
     for record in supplier_rows.iter_rows(named = True) :
@@ -96,19 +90,19 @@ def _build_known_products_block(
         return ''
 
     return (
-        f'### ⚠️ READ THIS FIRST — REFERENCE SAMPLE FOR "{supplier}"\n'
-        f'Below is a SAMPLE of how some of this supplier\'s products are already '
-        f'recorded in our system, one per line as "<Product Name> | Packing Size : '
-        f'<root packing size>". This is NOT the complete catalogue and NOT the only '
-        f'set of products — it is a reference to help you understand HOW this supplier '
-        f'names products and HOW its packing-size notation maps to a root packing '
-        f'size. The document will contain other products that are not in this sample '
-        f'— extract those too.\n'
-        f'1. NAMING : Learn this supplier\'s naming style from the examples. When a '
-        f'document item clearly matches one listed here, output that Product Name '
-        f'EXACTLY as written (character for character) so it reconciles with the '
-        f'existing record. For a product NOT in this sample, do not invent a match — '
-        f'extract it and name it following the SAME naming pattern/style shown here.\n'
+        f'### ⚠️ READ THIS FIRST — EXISTING PRODUCTS FOR "{supplier}"\n'
+        f'Below is the COMPLETE list of this supplier\'s products already recorded in '
+        f'our system, one per line as "<Product Name> | Packing Size : <root packing '
+        f'size>". The document may name the same product differently (abbreviations, '
+        f'missing sizes, brand prefixes, punctuation) — e.g. "MAMEE MONSTER F/P HOT & '
+        f'SPICY" may be recorded as "MAMEE MONSTER H&S 25Gx10". The document may also '
+        f'contain products that are not in this list — extract those too.\n'
+        f'1. NAMING : For EVERY document item, check this list first. When an item is '
+        f'the same product as one listed here (same brand, variant/flavour and size), '
+        f'output that Product Name EXACTLY as written (character for character) so it '
+        f'reconciles with the existing record. Only when no listed product matches, '
+        f'extract it as a new product named in the SAME naming pattern/style shown here. '
+        f'Do not force a match between products of different variants or sizes.\n'
         f'2. PACKING SIZE CONVENTION : The same written notation can mean different '
         f'root packing sizes for different suppliers (e.g. "2x4" may be a root '
         f'packing size of 2 for one supplier but 8 for another). Infer how THIS '
@@ -116,11 +110,11 @@ def _build_known_products_block(
         f'examples, then apply that SAME interpretation to EVERY document line item — '
         f'both the ones listed here and the new ones that are not.\n'
         f'3. Each product may appear in the output AT MOST ONCE.\n\n'
-        f'REFERENCE PRODUCTS :\n'
+        f'EXISTING PRODUCTS :\n'
         + '\n'.join(product_lines)
-        + '\n\n--- END OF REFERENCE SAMPLE. Use it to learn this supplier\'s naming '
-        + 'and packing-size patterns ; still extract every product in the document, '
-        + 'including ones not listed above. ---\n'
+        + '\n\n--- END OF EXISTING PRODUCTS. Reuse these exact names for matching '
+        + 'items ; still extract every product in the document, including ones not '
+        + 'listed above. ---\n'
     )
 
 
@@ -668,6 +662,10 @@ def process_document_with_llm(
                 f'The supplier for this document is already known and fixed : "{supplier}".\n'
                 f'Do NOT infer, search for, or output the supplier. You may omit the '
                 f'"supplier" field entirely — it will be ignored and overwritten.\n'
+                f'Use this supplier to apply the Section 4 supplier-specific price rules '
+                f'(Table 4.1) BEFORE any Pack Price math — if its Price Basis is '
+                f'CTN_AS_PRINTED, the printed price IS the Pack Price ; never multiply it '
+                f'by Packing Size.\n'
             )
 
             known_products_block : str = _build_known_products_block(
