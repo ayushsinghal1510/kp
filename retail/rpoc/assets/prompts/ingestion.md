@@ -410,6 +410,7 @@ When a supplier match is found in this section, these rules take precedence in t
 {
     "supplier": "string", 
     "exchange_rate": 1.0, 
+    "document_subtotal": 0.0,
     "products": [
         {
             "Barcode": "string", 
@@ -417,9 +418,16 @@ When a supplier match is found in this section, these rules take precedence in t
             "Packing Size": 1, 
             "Pack Price": 0.0, 
             "Selling Price": 0.0, 
-            "Promotion Price": 0.0
+            "Promotion Price": 0.0,
+            "Printed Unit Price": 0.0,
+            "Line Qty": 0.0,
+            "Line Amount": 0.0
         }
     ]
 }
 
 ```
+
+* **`Printed Unit Price` / `Line Qty` / `Line Amount` — TRANSCRIPTION ONLY, for the system's verification check.** Copy them exactly as printed on that product's row: the U/Price (Unit Price / Rate) column value, the ordered quantity number (e.g. "18 CTN" -> 18), and the row's Amount/Total column value. Do NOT use them to compute `Pack Price` (the Section 2 / Section 4 rules still decide `Pack Price`). If a value is not printed, use 0.0. These must come from the price/quantity/amount columns — never from a WEIGHT column.
+* **`Line Amount` must be READ from the AMOUNT column, NEVER calculated.** Do not compute qty × price — the system compares them precisely to catch misread prices, so a calculated amount defeats the check. If the printed amount disagrees with qty × price, output the printed amount anyway.
+* **`document_subtotal`** — the printed goods subtotal BEFORE GST / custom-form / other charges (e.g. TGS "Sub Tot 6,485.50"), read from the document, never calculated. 0.0 if not printed or if the document spans multiple invoices.

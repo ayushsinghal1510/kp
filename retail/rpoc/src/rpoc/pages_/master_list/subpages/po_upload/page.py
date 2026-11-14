@@ -205,6 +205,11 @@ def handle_po_approval_section() -> None :
         index = pending_df.index
     ).astype(str).str.replace(r'\s+' , ' ' , regex = True).str.strip().str.lower()
 
+    if 'Check' not in pending_df.columns :
+        pending_df['Check'] = ''
+
+    pending_df['Check'] = pending_df['Check'].fillna('')
+
     for carry_col in ['Barcode' , 'Filename'] :
 
         if carry_col not in pending_df.columns :
@@ -309,6 +314,7 @@ def handle_po_approval_section() -> None :
         'Approve' ,
         'Product Name' ,
         'Match To' ,
+        'Check' ,
         'Supplier' ,
         'Current Packing Size' , 
         'Incoming Packing Size' , 
@@ -367,7 +373,9 @@ def handle_po_approval_section() -> None :
 
     st.caption(
         '**Match To** = the existing master product this invoice line updates '
-        '(auto-suggested ; pick another or clear it to add the line as a new product).'
+        '(auto-suggested ; pick another or clear it to add the line as a new product). '
+        '**Check** = the price did not agree with the invoice row\'s own qty × price = amount ; '
+        'verify those lines against the invoice before approving.'
     )
 
     edited_pending_df : pd.DataFrame = st.data_editor(
@@ -424,7 +432,8 @@ def handle_po_approval_section() -> None :
             )
 
             approved_df.drop(
-                columns = ['Match To'] ,
+                columns = ['Match To' , 'Check'] ,
+                errors = 'ignore' ,
                 inplace = True
             )
 

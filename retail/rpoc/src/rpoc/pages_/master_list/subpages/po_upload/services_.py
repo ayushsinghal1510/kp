@@ -416,6 +416,51 @@ def _call_llm_with_retries(
     return {}
 
 
+def _price_check_note(
+    pack_price : float ,
+    packing_size : float ,
+    printed_unit_price : Any ,
+    line_qty : Any ,
+    line_amount : Any
+) -> str :
+
+    '''
+    Cross-check the extracted price against the row's own printed numbers.
+    Returns '' when consistent , otherwise a short warning for the review table.
+    Catches misreads such as the WEIGHT column ("11.25 KG") taken as the price.
+    '''
+
+    def _f(value : Any) -> float :
+        try :
+            return float(str(value).replace(',' , ''))
+        except (TypeError , ValueError) :
+            return 0.0
+
+    unit : float = _f(printed_unit_price)
+    qty : float = _f(line_qty)
+    amount : float = _f(line_amount)
+
+    def _close(a : float , b : float) -> bool :
+        return abs(a - b) <= max(0.02 , 0.01 * max(abs(a) , abs(b)))
+
+    notes : list[str] = []
+
+    if unit > 0 and qty > 0 and amount > 0 and not _close(unit * qty , amount) :
+        notes.append(f'⚠ printed price {unit:g} × qty {qty:g} ≠ amount {amount:g}')
+
+    if unit > 0 and pack_price > 0 and not (
+        _close(pack_price , unit) or _close(pack_price , unit * packing_size)
+    ) :
+        notes.append(f'⚠ pack price {pack_price:g} ≠ printed price {unit:g}')
+
+    if unit == 0 and qty > 0 and amount > 0 and pack_price > 0 and not (
+        _close(pack_price * qty , amount) or _close(pack_price * qty / max(packing_size , 1) , amount)
+    ) :
+        notes.append(f'⚠ pack price {pack_price:g} × qty {qty:g} ≠ amount {amount:g}')
+
+    return ' ; '.join(notes)
+
+
 def _process_and_deduplicate_products(
     data : dict[str , Any] ,
     supplier : str | None = None
@@ -494,13 +539,33 @@ def _process_and_deduplicate_products(
         else : 
             deduplicated_products[sanitized_search_key] = prod
 
-    for product in deduplicated_products.values() : 
+    line_amounts_sum : float = 0.0
 
-        try : 
+    for product in deduplicated_products.values() :
+
+        try :
 
             pack_price_val : float = float(product.pop('Pack Price' , 0.0) or 0.0)
 
-            if exchange_rate > 0.0 and exchange_rate != 1.0 : 
+            # * Recompute from the extracted price (not the printed amount) so a
+            # * misread price shows up as a gap against the printed subtotal. Use the
+            # * printed unit price (qty x printed price = line amount on any invoice) ;
+            # * fall back to Pack Price when the unit price was not transcribed.
+            try :
+                line_price : float = float(str(product.get('Printed Unit Price') or 0).replace(',' , '')) or pack_price_val
+                line_amounts_sum += float(str(product.get('Line Qty') or 0).replace(',' , '')) * line_price
+            except (TypeError , ValueError) :
+                pass
+
+            check_note : str = _price_check_note(
+                pack_price_val ,
+                float(product.get('Packing Size' , 1) or 1) ,
+                product.pop('Printed Unit Price' , 0.0) ,
+                product.pop('Line Qty' , 0.0) ,
+                product.pop('Line Amount' , 0.0)
+            )
+
+            if exchange_rate > 0.0 and exchange_rate != 1.0 :
                 pack_price_val = pack_price_val / exchange_rate
 
             selling_price_val : float = float(product.pop('Selling Price' , 0.0) or 0.0)
@@ -513,7 +578,8 @@ def _process_and_deduplicate_products(
                 'Pack Price' : pack_price_val , 
                 'Selling Price' : selling_price_val , 
                 'Promotion Price' : promotion_price_val , 
-                'Supplier' : supplier_display , 
+                'Supplier' : supplier_display ,
+                'Check' : check_note ,
                 'Redundant' : json.dumps(
                     product.get('Redundant' , [])
                 )
@@ -523,6 +589,28 @@ def _process_and_deduplicate_products(
 
         except Exception as inner_e : 
             st.error(f'Error processing product dictionary : {inner_e}')
+
+    # * Document-level check : the lines must add up to the printed subtotal. A row
+    # * misread consistently (price AND amount) slips past the per-row check but
+    # * not past this one.
+    printed_subtotal : float = 0.0
+
+    try :
+        printed_subtotal = float(str(data.get('document_subtotal') or 0).replace(',' , ''))
+    except (TypeError , ValueError) :
+        printed_subtotal = 0.0
+
+    if printed_subtotal > 0 and line_amounts_sum > 0 :
+
+        if abs(line_amounts_sum - printed_subtotal) > max(0.05 , 0.001 * printed_subtotal) :
+
+            total_note : str = (
+                f'⚠ invoice lines add up to {line_amounts_sum:,.2f} but the printed '
+                f'subtotal is {printed_subtotal:,.2f} — a price on this invoice was misread'
+            )
+
+            for item in processed_items :
+                item['Check'] = f'{item["Check"]} ; {total_note}' if item['Check'] else total_note
 
     st.write(f'Products added with exchange rate : {exchange_rate}')
     
@@ -777,7 +865,15 @@ def _coverage(a : list[str] , b : list[str]) -> float :
     if not a or not b :
         return 0.0
 
-    return sum(max(_token_match(t , o) for o in b) for t in a) / len(a)
+    scores : list[float] = [max(_token_match(t , o) for o in b) for t in a]
+
+    # * Unmatched single letters (the F / P of "F/P") are noise , not evidence.
+    kept : list[float] = [
+        score for token , score in zip(a , scores)
+        if not (len(token) == 1 and score == 0.0)
+    ]
+
+    return sum(kept) / len(kept) if kept else 0.0
 
 
 def _name_similarity(a : list[str] , b : list[str]) -> float :
