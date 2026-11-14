@@ -565,6 +565,11 @@ def _process_and_deduplicate_products(
                 product.pop('Line Amount' , 0.0)
             )
 
+            verify_note : str = product.pop('Verify Note' , '')
+
+            if verify_note :
+                check_note = f'{check_note} ; {verify_note}' if check_note else verify_note
+
             if exchange_rate > 0.0 and exchange_rate != 1.0 :
                 pack_price_val = pack_price_val / exchange_rate
 
@@ -793,13 +798,36 @@ def process_document_with_llm(
             augmented_prompt
         )
 
-        parsed_data : dict[str , Any] = _call_llm_with_retries(
-            content ,
-            model_client
-        )
+        # * Images / PDFs can be misread (e.g. the WEIGHT column taken as the price,
+        # * with the qty bent to make the row add up). Run an independent , narrow
+        # * "price columns only" read in parallel and flag rows where the two disagree.
+        is_scanned : bool = uploaded_file.type in ['application/pdf' , 'image/jpeg' , 'image/png']
+
+        with ThreadPoolExecutor(max_workers = 2) as pool :
+
+            main_future : Any = pool.submit(
+                _call_llm_with_retries ,
+                content ,
+                model_client
+            )
+
+            verify_future : Any = pool.submit(
+                _call_llm_with_retries ,
+                _extract_content_from_file(uploaded_file , VERIFY_PROMPT) ,
+                model_client
+            ) if is_scanned else None
+
+            parsed_data : dict[str , Any] = main_future.result()
+            verify_data : dict[str , Any] = verify_future.result() if verify_future else {}
 
         if not parsed_data :
             return []
+
+        if verify_data :
+            _apply_verification(
+                parsed_data ,
+                verify_data
+            )
 
         processed_items : list[dict[str , Any]] = _process_and_deduplicate_products(
             parsed_data ,
@@ -813,6 +841,105 @@ def process_document_with_llm(
         st.error(f'Document processing pipeline failed : {e}')
 
         return []
+
+VERIFY_PROMPT : str = '''You are checking a supplier invoice. Transcribe ONLY the line-item table.
+
+For EVERY product row output, exactly as printed on that row:
+- "Barcode" : the item code / barcode digits ("" if none)
+- "Description" : the description text
+- "Qty" : the ordered quantity NUMBER (e.g. "18 CTN" -> 18)
+- "Unit Price" : the value in the unit price column (headed U.PRICE / U/PRICE / UNIT PRICE / RATE / PRICE)
+- "Amount" : the value in the AMOUNT / TOTAL column of that row
+
+Rules :
+- Read each number from its own column. NEVER use a WEIGHT column (values with KG / LT / G) as a price, quantity or amount.
+- Do NOT calculate anything. Do NOT make numbers agree — if qty x unit price differs from the printed amount, still output what is printed.
+- Read column by column carefully : the price column is usually between the weight / packing columns and the amount column.
+
+Return JSON only : {"rows" : [{"Barcode" : "" , "Description" : "" , "Qty" : 0 , "Unit Price" : 0 , "Amount" : 0}]}
+'''
+
+
+def _apply_verification(
+    data : dict[str , Any] ,
+    verify_data : dict[str , Any]
+) -> None :
+
+    '''
+    Compare each extracted product with the independent second read (VERIFY_PROMPT)
+    and store a 'Verify Note' on products where the price or quantity disagree.
+    '''
+
+    def _f(value : Any) -> float :
+        try :
+            return float(str(value).replace(',' , ''))
+        except (TypeError , ValueError) :
+            return 0.0
+
+    def _close(a : float , b : float) -> bool :
+        return abs(a - b) <= max(0.02 , 0.01 * max(abs(a) , abs(b)))
+
+    verify_rows : list[dict[str , Any]] = [
+        r for r in verify_data.get('rows' , []) if isinstance(r , dict)
+    ]
+
+    used : set[int] = set()
+
+    for product in data.get('products' , []) :
+
+        barcode : str = re.sub(r'\D' , '' , str(product.get('Barcode') or ''))
+
+        match_index : int | None = None
+
+        if len(barcode) >= 8 :
+            match_index = next(
+                (
+                    i for i , r in enumerate(verify_rows)
+                    if i not in used and re.sub(r'\D' , '' , str(r.get('Barcode') or '')) == barcode
+                ) ,
+                None
+            )
+
+        if match_index is None :
+
+            product_tokens : list[str] = _name_tokens(product.get('Product Name') or product.get('Product Description'))
+
+            best_score : float = 0.6
+
+            for i , r in enumerate(verify_rows) :
+
+                if i in used :
+                    continue
+
+                score : float = _name_similarity(product_tokens , _name_tokens(r.get('Description')))
+
+                if score > best_score :
+                    best_score , match_index = score , i
+
+        if match_index is None :
+            continue
+
+        used.add(match_index)
+
+        row : dict[str , Any] = verify_rows[match_index]
+
+        second_price : float = _f(row.get('Unit Price'))
+        second_qty : float = _f(row.get('Qty'))
+
+        first_price : float = _f(product.get('Printed Unit Price')) or _f(product.get('Pack Price'))
+        first_qty : float = _f(product.get('Line Qty'))
+
+        notes : list[str] = []
+
+        if second_price > 0 and first_price > 0 and not _close(second_price , first_price) :
+            notes.append(f'⚠ second read : price {second_price:g} (first read {first_price:g})')
+
+        if second_qty > 0 and first_qty > 0 and not _close(second_qty , first_qty) :
+            notes.append(f'⚠ second read : qty {second_qty:g} (first read {first_qty:g})')
+
+        if notes :
+            product['Verify Note'] = ' ; '.join(notes)
+
 
 def _match_key(text : Any) -> str :
 

@@ -51,12 +51,19 @@ def load_session_state() :
         'chain-rules'
     ]
 
-    # * Reload if missing or only partially populated (e.g. a previous run crashed
-    # * midway) ; build into a local dict and assign atomically so a failure can
-    # * never leave a half-filled prompts dict wedged in session state.
+    # * Reload if missing , only partially populated (e.g. a previous run crashed
+    # * midway) , or any prompt file was edited since it was loaded — so prompt
+    # * changes apply without restarting the app. Build into a local dict and
+    # * assign atomically so a failure never leaves a half-filled prompts dict.
+    prompt_mtimes : dict[str , float] = {
+        key : os.path.getmtime(st.session_state.config['main']['prompts'][key])
+        for key in required_prompts
+    }
+
     if (
         'prompts' not in st.session_state or
-        any(key not in st.session_state.prompts for key in required_prompts)
+        any(key not in st.session_state.prompts for key in required_prompts) or
+        st.session_state.get('prompt_mtimes') != prompt_mtimes
     ) :
 
         loaded_prompts : dict[str , str] = {}
@@ -67,6 +74,7 @@ def load_session_state() :
                 loaded_prompts[key] = prompt_file.read()
 
         st.session_state.prompts = loaded_prompts
+        st.session_state.prompt_mtimes = prompt_mtimes
 
     if 'df' not in st.session_state : 
         st.session_state.df = pl.read_csv(st.session_state.config['main']['path']['csv'])
